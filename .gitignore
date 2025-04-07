@@ -54,7 +54,6 @@ config.mk
 *.jou
 *.rpt
 *.vdi
-*.txt
 
 ## bitstream
 *.bit
