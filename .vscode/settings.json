@@ -1,0 +1,10 @@
+{
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "files.associations": {
+    "*.py": "python",
+    "*.v": "verilog",
+    "*.vh": "verilog",
+    "*.sv": "systemverilog",
+    "new": "cpp"
+  }
+}

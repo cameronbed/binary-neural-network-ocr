@@ -1,47 +1,59 @@
-VIVADO = "C:/Xilinx/Vivado/2024.2/bin/vivado.bat"
-BUILD_DIR = build
-BIT_FILE = $(BUILD_DIR)/blinky.bit
-VIVADO_BIN = "C:/Xilinx/Vivado/2024.2/bin"
-VIVADO_UNWRAPPED = /c/Xilinx/Vivado/2024.2/bin/unwrapped
+# Vivado Paths
+VIVADO := "C:/Xilinx/Vivado/2024.2/bin/vivado.bat"
+VIVADO_BIN := "C:/Xilinx/Vivado/2024.2/bin"
 
+# HDL sources
+HDL_SRC := src/fpga/blinky.v
 
-.PHONY: all build flash clean
+# Testbench C++ files
+TEST_CPP := tests/blinky_tb.cpp
 
-all: build flash
+# Testbench HDL files
+SIM_TOP := blinky_tb
+SIM_SRC := $(HDL_SRC) tests/blinky_tb.v
 
-build:
+# Verilator config
+VERILATOR := verilator
+BUILD_DIR := build
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+.PHONY: bitstream flash
+bitstream:
 	@echo "==> Synthesizing and generating bitstream..."
 	$(VIVADO) -mode batch -source scripts/run_vivado.tcl
 
-flash: $(BIT_FILE)
+flash: bitstream
 	@echo "==> Programming Basys3 board..."
 	$(VIVADO) -mode batch -source scripts/flash_vivado.tcl
 
-$(BIT_FILE): build
-
+.PHONY: clean
 clean:
 	@echo "==> Cleaning build files..."
-	rm -rf $(BUILD_DIR)
-	rm -rf work xsim.dir *.log *.jou *.wdb
+	rm -rf $(BUILD_DIR) work xsim.dir *.log *.jou *.wdb
 
-
-SIM_BUILD = build
-SIM_TOP = blinky_tb
-SIM_SRC = src/fpga/blinky.v tests/blinky_tb.v
-SIM_SNAPSHOT = sim_out
-
+.PHONY: sim wave
 sim:
-	@echo "==> Setting up simulation environment..."
+	@echo "▶ Simulating with Vivado..."
 	mkdir -p build work
-
-	@echo "==> Compiling sources..."
 	$(VIVADO_BIN)/xvlog --nolog --incr --work work $(SIM_SRC)
-
-	@echo "==> Elaborating..."
 	$(VIVADO_BIN)/xelab --nolog $(SIM_TOP) -s sim_out
-
-	@echo "==> Running simulation..."
 	$(VIVADO_BIN)/xsim sim_out --runall --tclbatch scripts/run_wave.tcl
 
 wave:
 	gtkwave build/blinky_tb.vcd &
+
+.PHONY: configure
+configure:
+	@echo "⚙️  Configuring CMake..."
+	cmake -S . -B $(BUILD_DIR)
+
+.PHONY: test
+test: clean configure
+ifndef TEST
+	$(error ❌ You must provide TEST=<test_name> (e.g. make test TEST=blinky_tb))
+endif
+	@echo "Building and running test: $(TEST)"
+	cmake --build $(BUILD_DIR) --target run_$(TEST)
+	ctest --test-dir $(BUILD_DIR) -R ^$(TEST) --output-on-failure
