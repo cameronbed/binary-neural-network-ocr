@@ -1,90 +1,130 @@
-`timescale 1ns/1ps
-module spi_peripheral #(
-    parameter [7:0] INITIAL_TX = 8'hA5
-)(
-    input  logic clk,      // System clock (e.g., 50 MHz)
-    input  logic rst_n,    // Active-low reset
-    input  logic SCLK,     // SPI clock from master
-    input  logic CS,       // Chip Select (active low)
-    input  logic SDI,      // Serial Data In (from master)
-    output logic SDO,      // Serial Data Out (to master)
-    output logic [7:0] rx_data, // Received 8-bit data
-    output logic rx_valid      // Asserted one clock cycle when data is valid
+`timescale 1ns / 1ps
+module spi_peripheral (
+    input logic clk,  // System clock
+    input logic rst,  // Active-low reset
+    input logic SCLK,  // SPI clock
+    input logic COPI,  // Controller-out-Peripheral-In
+    input logic CS,  // Chip-select
+    output logic CIPO,  // Controller-in-Peripheral-Out
+    output logic [7:0] rx_byte,  // Captured received byte
+    output logic byte_valid
 );
+  typedef enum logic [1:0] {
+    IDLE,
+    TRANSFER,
+    BYTE_READY
+  } spi_state_t;
+  spi_state_t state, next_state;
 
-  // Synchronize asynchronous SCLK and CS to the system clock domain
-  logic SCLK_sync, SCLK_sync_prev;
-  logic CS_sync,   CS_sync_prev;
+  // Data Registers
+  logic [7:0] rx_shift_reg;  // Shift register to hold the incoming data
+  logic [7:0] tx_shift_reg;  // Shift register to hold the outgoing data
+  int bit_count;
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      SCLK_sync      <= 0;
-      SCLK_sync_prev <= 0;
-      CS_sync        <= 1;
-      CS_sync_prev   <= 1;
+  // SCLK signals
+  logic sclk_sync_0, sclk_sync_1;
+  logic sclk_prev;
+  logic sclk_rising, sclk_falling;
+
+  // always_ff block to synchronize SCLK with the system clock
+  always_ff @(posedge clk or negedge rst) begin
+    if (!rst) begin
+      sclk_sync_0 <= 1'b0;
+      sclk_sync_1 <= 1'b0;
+      sclk_prev   <= 1'b0;
     end else begin
-      SCLK_sync_prev <= SCLK_sync;
-      SCLK_sync      <= SCLK;
-      CS_sync_prev   <= CS_sync;
-      CS_sync        <= CS;
+      sclk_sync_0 <= SCLK;  // waiting two clock cycles to synchronize SCLK
+      sclk_sync_1 <= sclk_sync_0;
+      sclk_prev   <= sclk_sync_1;
     end
   end
+  assign sclk_rising  = (sclk_sync_1 && !sclk_prev);
+  assign sclk_falling = (!sclk_sync_1 && sclk_prev);
 
-  wire SCLK_rising  = (SCLK_sync && !SCLK_sync_prev);
-  wire SCLK_falling = (!SCLK_sync && SCLK_sync_prev);
-  wire cs_active    = ~CS_sync;  // Active when CS is low
-
-  // Internal registers for shifting data and counting bits
-  logic [7:0] rx_shift;
-  logic [7:0] tx_shift;
-  logic [3:0] bit_cnt;  // Counts from 0 to 8
-  logic       transaction_active;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      transaction_active <= 0;
-      bit_cnt            <= 0;
-      rx_shift           <= 8'b0;
-      tx_shift           <= INITIAL_TX;
-      SDO                <= 1'b0;
-      rx_valid           <= 1'b0;
-      rx_data            <= 8'b0;
+  // always_ff block to handle the SPI communication and FSM
+  always_ff @(posedge clk or negedge rst) begin
+    if (!rst) begin
+      state        <= IDLE;
+      rx_shift_reg <= 8'd0;
+      tx_shift_reg <= 8'd0;
+      bit_count    <= 0;
+      CIPO         <= 1'b0;
+      byte_valid   <= 1'b0;
+      rx_byte      <= 8'd0;
     end else begin
-      if (!cs_active) begin
-        // When chip select is inactive, clear transaction state
-        transaction_active <= 0;
-        bit_cnt            <= 0;
-        rx_valid           <= 0;
-      end else begin
-        if (!transaction_active) begin
-          // Start a new SPI transaction
-          transaction_active <= 1;
-          bit_cnt            <= 0;
-          tx_shift           <= INITIAL_TX;  // Preload TX register
-          SDO                <= INITIAL_TX[7]; // Output MSB immediately
-          rx_valid           <= 0;
-          rx_shift           <= 8'b0;
-        end else begin
-          rx_valid <= 0; // Default
-          // On SCLK rising edge, sample SDI into the shift register
-          if (SCLK_rising) begin
-            rx_shift <= {rx_shift[6:0], SDI};
-            bit_cnt  <= bit_cnt + 1;
-          end
-          // On falling edge, shift out TX data to SDO
-          if (SCLK_falling && (bit_cnt != 0)) begin
-            tx_shift <= {tx_shift[6:0], 1'b0};
-            SDO      <= tx_shift[6]; // Next bit becomes MSB
-          end
-          // When 8 bits have been transferred, capture the received byte
-          if (bit_cnt == 8) begin
-            rx_data         <= {rx_shift[6:0], SDI}; // Final bit from last rising edge
-            rx_valid        <= 1;
-            transaction_active <= 0;  // End of transaction
+      state <= next_state;
+      byte_valid <= 1'b0;  // Reset byte_valid at the start of each cycle
+      case (state)
+        IDLE: begin
+          bit_count    <= 0;
+          rx_shift_reg <= 8'd0;
+          CIPO         <= 1'b0;
+        end
+
+        TRANSFER: begin
+          if (!CS) begin
+            if (sclk_rising) begin
+              // Shift data into the rx_shift_reg on sclk rising edge
+              rx_shift_reg <= {rx_shift_reg[6:0], COPI};
+              bit_count <= bit_count + 1;
+            end
+            if (sclk_falling) begin
+              // Shift out the next bit on sclk falling edge
+              CIPO <= tx_shift_reg[7];
+              tx_shift_reg <= {tx_shift_reg[6:0], 1'b0};  // Shift left and fill with 0.
+            end
           end
         end
-      end
+
+        BYTE_READY: begin
+          rx_byte <= rx_shift_reg;  // Capture the received byte
+          byte_valid <= 1'b1;  // Indicate that a byte is ready
+          bit_count <= 0;  // Reset the bit counter for the next byte.
+          rx_shift_reg <= 8'd0;  // Reset the shift register
+
+          if (!CS) begin
+            tx_shift_reg <= 8'hA5;  // Load the shift register with a default value (e.g., 0xA5)
+          end else begin
+            CIPO <= 1'b0;  // Deactivate CIPO when CS is high
+          end
+        end
+      endcase
     end
   end
+
+  //FSM Logic
+  always_comb begin
+    case (state)
+      IDLE: begin
+        if (!CS) begin
+          next_state = TRANSFER;
+        end else begin
+          next_state = IDLE;
+        end
+      end
+
+      // Check for a finished state and check for CS high to reset the state
+      TRANSFER: begin
+        if (CS) begin
+          next_state = IDLE;
+        end else if (bit_count == 8) begin
+          next_state = BYTE_READY;
+        end else begin
+          next_state = TRANSFER;
+        end
+      end
+
+      BYTE_READY: begin
+        if (CS) begin
+          next_state = IDLE;  // Go back to IDLE when CS is high
+        end else begin
+          next_state = TRANSFER;  // Continue transferring data if CS is low
+        end
+      end
+
+      default: next_state = IDLE;  // Default case to avoid latches
+    endcase
+  end
+
 
 endmodule

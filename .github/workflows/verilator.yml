@@ -23,4 +23,5 @@ jobs:
 
       - name: Run Tests
         run: |
-          make test TEST=spi_peripheral_tb
+          make
+          make test

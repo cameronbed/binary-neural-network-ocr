@@ -5,6 +5,11 @@
     "*.v": "verilog",
     "*.vh": "verilog",
     "*.sv": "systemverilog",
-    "new": "cpp"
+    "new": "cpp",
+    "iostream": "cpp"
+  },
+  // Language-specific (example: only for Python)
+  "[systemverilog]": {
+    "editor.defaultFormatter": "bmpenuelas.systemverilog-formatter-vscode"
   }
 }
