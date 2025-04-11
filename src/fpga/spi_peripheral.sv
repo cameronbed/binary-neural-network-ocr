@@ -6,8 +6,13 @@ module spi_peripheral (
     input logic COPI,  // Controller-out-Peripheral-In
     input logic CS,  // Chip-select
     output logic CIPO,  // Controller-in-Peripheral-Out
+    input logic [7:0] tx_byte,  // Byte to be transmitted
     output logic [7:0] rx_byte,  // Captured received byte
-    output logic byte_valid
+    output logic byte_valid,
+    // Debug signals
+    output logic [1:0] debug_state,  // Debug: current state
+    output logic [3:0] debug_bit_count,  // Debug: bit count
+    output logic [7:0] debug_rx_byte  // Debug: received byte
 );
   typedef enum logic [1:0] {
     IDLE,
@@ -19,7 +24,7 @@ module spi_peripheral (
   // Data Registers
   logic [7:0] rx_shift_reg;  // Shift register to hold the incoming data
   logic [7:0] tx_shift_reg;  // Shift register to hold the outgoing data
-  int bit_count;
+  logic [3:0] bit_count;  // Change bit_count to 4 bits to match debug_bit_count
 
   // SCLK signals
   logic sclk_sync_0, sclk_sync_1;
@@ -44,87 +49,91 @@ module spi_peripheral (
   // always_ff block to handle the SPI communication and FSM
   always_ff @(posedge clk or negedge rst) begin
     if (!rst) begin
-      state        <= IDLE;
-      rx_shift_reg <= 8'd0;
-      tx_shift_reg <= 8'd0;
-      bit_count    <= 0;
-      CIPO         <= 1'b0;
-      byte_valid   <= 1'b0;
-      rx_byte      <= 8'd0;
+      state           <= IDLE;
+      rx_shift_reg    <= 8'd0;
+      tx_shift_reg    <= 8'd0;
+      bit_count       <= 0;
+      CIPO            <= 1'b0;
+      byte_valid      <= 1'b0;
+      rx_byte         <= 8'd0;
+      // Debug signals
+      debug_state     <= 2'b00;  // Reset debug state
+      debug_bit_count <= 4'd0;  // Reset debug bit count
+      debug_rx_byte   <= 8'd0;  // Reset debug received byte
     end else begin
-      state <= next_state;
-      byte_valid <= 1'b0;  // Reset byte_valid at the start of each cycle
+      // First, update the debug signals
+      debug_state <= state;
+      debug_bit_count <= bit_count;
+      debug_rx_byte <= rx_byte;
+
+      // Default - clear byte_valid
+      byte_valid <= 1'b0;
+
       case (state)
         IDLE: begin
-          bit_count    <= 0;
+          bit_count <= 4'd0;
           rx_shift_reg <= 8'd0;
-          CIPO         <= 1'b0;
+
+          if (!CS) begin
+            state <= TRANSFER;
+            tx_shift_reg <= tx_byte;  // Load transmit data
+            $display("SPI: Starting new transfer, CS active");
+          end
         end
 
         TRANSFER: begin
-          if (!CS) begin
-            if (sclk_rising) begin
-              // Shift data into the rx_shift_reg on sclk rising edge
-              rx_shift_reg <= {rx_shift_reg[6:0], COPI};
-              bit_count <= bit_count + 1;
+          if (sclk_rising) begin
+            // Sample data on rising edge
+            rx_shift_reg <= {rx_shift_reg[6:0], COPI};
+            bit_count <= bit_count + 4'd1;
+            $display("SPI: Bit %d received: %b, shift_reg=%h", bit_count, COPI, {rx_shift_reg[6:0],
+                                                                                 COPI});
+
+            // When we've received 8 bits, go to BYTE_READY state
+            if (bit_count == 4'd7) begin
+              // Note: The 8th bit is captured on this rising edge
+              state <= BYTE_READY;
+              // Capture the full byte (including the 8th bit we just sampled)
+              rx_byte <= {rx_shift_reg[6:0], COPI};
+              byte_valid <= 1'b1;  // Signal byte is valid
+              $display("SPI: BYTE READY - rx_byte=%h", {rx_shift_reg[6:0], COPI});
             end
-            if (sclk_falling) begin
-              // Shift out the next bit on sclk falling edge
-              CIPO <= tx_shift_reg[7];
-              tx_shift_reg <= {tx_shift_reg[6:0], 1'b0};  // Shift left and fill with 0.
-            end
+          end
+
+          if (sclk_falling) begin
+            // Transmit data on falling edge
+            CIPO <= tx_shift_reg[7];
+            tx_shift_reg <= {tx_shift_reg[6:0], 1'b0};
+          end
+
+          // If CS deasserted, go back to IDLE
+          if (CS) begin
+            state <= IDLE;
+            $display("SPI: Transfer aborted, CS inactive");
           end
         end
 
         BYTE_READY: begin
-          rx_byte <= rx_shift_reg;  // Capture the received byte
-          byte_valid <= 1'b1;  // Indicate that a byte is ready
-          bit_count <= 0;  // Reset the bit counter for the next byte.
-          rx_shift_reg <= 8'd0;  // Reset the shift register
+          // Reset bit counter for next byte
+          bit_count <= 4'd0;
 
+          // Start a new transfer or go back to IDLE
           if (!CS) begin
-            tx_shift_reg <= 8'hA5;  // Load the shift register with a default value (e.g., 0xA5)
+            state <= TRANSFER;
+            tx_shift_reg <= tx_byte;  // Load new transmit data
+            $display("SPI: Starting next byte transfer");
           end else begin
-            CIPO <= 1'b0;  // Deactivate CIPO when CS is high
+            state <= IDLE;
+            $display("SPI: Transfer complete, going to IDLE");
           end
         end
+
+        default: state <= IDLE;
       endcase
     end
   end
 
-  //FSM Logic
-  always_comb begin
-    case (state)
-      IDLE: begin
-        if (!CS) begin
-          next_state = TRANSFER;
-        end else begin
-          next_state = IDLE;
-        end
-      end
-
-      // Check for a finished state and check for CS high to reset the state
-      TRANSFER: begin
-        if (CS) begin
-          next_state = IDLE;
-        end else if (bit_count == 8) begin
-          next_state = BYTE_READY;
-        end else begin
-          next_state = TRANSFER;
-        end
-      end
-
-      BYTE_READY: begin
-        if (CS) begin
-          next_state = IDLE;  // Go back to IDLE when CS is high
-        end else begin
-          next_state = TRANSFER;  // Continue transferring data if CS is low
-        end
-      end
-
-      default: next_state = IDLE;  // Default case to avoid latches
-    endcase
-  end
-
+  // No longer need the separate comb logic since we handle transitions directly
+  assign next_state = state;  // For compatibility
 
 endmodule
