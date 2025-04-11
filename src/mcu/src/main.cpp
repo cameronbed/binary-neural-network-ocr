@@ -1,11 +1,6 @@
 // main.cpp
 #include "mbed.h"
-#include "TS_DISCO_F429ZI.h"
-#include "LCD_DISCO_F429ZI.h"
-
-// --- LCD and Touchscreen Initialization ---
-LCD_DISCO_F429ZI lcd; // object to handle LCD display functionalities
-TS_DISCO_F429ZI ts;   // object to handle touchscreen functionalities
+#include "f429zi_screen.hpp"
 
 // ----- Function Prototypes -----                                                            // sets up application environment
 static void setup_screen();                                           // initializes the screen
@@ -31,26 +26,6 @@ void setup_screen()
     thread_sleep_for(1);
 
     status = ts.Init(lcd.GetXSize(), lcd.GetYSize()); // initialize touchscreen
-
-    if (status != TS_OK) // check initialization status
-    {
-        lcd.Clear(LCD_COLOR_RED); // red for failure
-        lcd.SetBackColor(LCD_COLOR_RED);
-        lcd.SetTextColor(LCD_COLOR_WHITE);
-        lcd.DisplayStringAt(0, LINE(5), (uint8_t *)"TOUCHSCREEN INIT FAIL", CENTER_MODE);
-    }
-    else
-    {
-        lcd.Clear(LCD_COLOR_GREEN); // green for success
-        lcd.SetBackColor(LCD_COLOR_GREEN);
-        lcd.SetTextColor(LCD_COLOR_WHITE);
-        lcd.DisplayStringAt(0, LINE(5), (uint8_t *)"TOUCHSCREEN INIT OK", CENTER_MODE);
-    }
-
-    thread_sleep_for(1);
-    lcd.Clear(LCD_COLOR_BLUE); // default blue background
-    lcd.SetBackColor(LCD_COLOR_BLUE);
-    lcd.SetTextColor(LCD_COLOR_WHITE);
 }
 
 pair<uint16_t, uint16_t> read_touchscreen(TS_StateTypeDef &TS_State)
@@ -126,16 +101,4 @@ void clearButtons()
     lcd.FillRect(132, 252, 98, 48);
     lcd.FillRect(12, 252, 98, 48);
     lcd.SetTextColor(LCD_COLOR_WHITE);
-}
-
-void display_count(uint8_t count)
-{
-    lcd.SetBackColor(LCD_COLOR_BLUE);
-    lcd.SetTextColor(LCD_COLOR_WHITE);
-    char countStr[10];
-    sprintf(countStr, "%d", count);
-    lcd.SetFont(&Font20);
-    lcd.ClearStringLine(10);
-    lcd.DisplayStringAtLine(10, (uint8_t *)countStr);
-    lcd.SetFont(&Font16);
 }
