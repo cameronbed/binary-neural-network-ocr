@@ -3,76 +3,83 @@
 `timescale 1ns / 1ps
 module image_buffer (
     input logic clk,
-    input logic reset,
+    input logic rst_n,  // Active Low
     input logic clear_buffer,
     input logic [7:0] data_in,
     input logic write_enable,
-    input logic read_enable,
-    output logic [7:0] data_out[0:27][0:27],
+    output logic data_out[0:783],  // Change to unpacked array
     output logic buffer_full,
-    output logic buffer_empty,
+    output logic buffer_empty,  // Declare as logic for procedural assignment
 
     // Debug outputs
-    output logic [9:0] debug_write_addr,   // Debug: current write address
-    output logic       debug_buffer_full,  // Debug: buffer full status
-    output logic       debug_buffer_empty  // Debug: buffer empty status
+    output logic [9:0] debug_write_addr,    // Changed from [0:783] to [9:0]
+    output logic       debug_buffer_full,   // Debug: buffer full status
+    output logic       debug_buffer_empty,  // Debug: buffer empty status
+    output logic       debug_write_enable
 );
-  // 2D array for 8-bit image pixels
-  logic [7:0] buffer[0:27][0:27];
+  // DEBUG remains as an int
+  parameter int DEBUG = 1;  // Debug flag: 0 = off, non-zero = on
 
+  // 2D array for 1-bit image pixels
+  parameter int ROWS = 28;
+  parameter int COLS = 28;
+  // Directly assign TOTAL_PIXELS as a constant value
+  localparam logic [9:0] TOTAL_PIXELS = 10'd784;
+
+  logic [TOTAL_PIXELS-1:0] buffer;
   // Write pointer to track how many pixels have been written (max 784 = 28x28)
-  logic [9:0] write_addr;
+  logic [9:0] write_addr;  // Fixed width for TOTAL_PIXELS
 
-  // Create a pulse detector for writes
-  logic write_pulse;
-  logic prev_write_enable;
+  integer i;  // Declare loop variable as integer for proper comparison
 
-  integer i, j;
-  always_ff @(posedge clk or posedge reset) begin
-    if (reset) begin
-      write_addr <= 10'd0;
-      prev_write_enable <= 1'b0;
-      // Clear the buffer
-      for (i = 0; i < 28; i = i + 1) begin
-        for (j = 0; j < 28; j = j + 1) begin
-          buffer[i][j] <= 8'd0;
-        end
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      write_addr <= '0;
+      for (i = 0; i < TOTAL_PIXELS; i = i + 1) begin
+        // Use blocking assignment in reset branch
+        buffer[i] <= 1'b0;
       end
-
-      // Reset debug signals
-      debug_write_addr   <= 10'd0;
-      debug_buffer_full  <= 1'b0;
-      debug_buffer_empty <= 1'b1;
-    end else begin
-      // Update the previous write_enable for edge detection
-      prev_write_enable <= write_enable;
-
-      // Create a pulse on rising edge of write_enable
-      write_pulse = write_enable && !prev_write_enable;
-
-      // Update debug signals with current status
-      debug_write_addr   <= write_addr;
-      debug_buffer_full  <= (write_addr >= 10'd784);  // Full when we've written all 784 bytes
-      debug_buffer_empty <= (write_addr == 10'd0);  // Empty when write_addr is 0
-
-      if (clear_buffer) begin
-        // Reset write address on clear command
-        write_addr <= 10'd0;
-        $display("IMAGE_BUFFER: Clearing buffer");
-      end else if (write_enable && !buffer_full) begin
-        // Only write and increment on valid write pulse
-        buffer[write_addr/28][write_addr%28] <= data_in;
-        write_addr <= write_addr + 10'd1;
-        $display("IMAGE_BUFFER: Writing data 0x%h at (%d,%d), addr=%d->%d", data_in,
-                 write_addr / 28, write_addr % 28, write_addr, write_addr + 1);
+      if (DEBUG != 0) $display("IMAGE_BUFFER: Reset applied, write_addr set to 0");
+    end else if (clear_buffer) begin
+      write_addr <= '0;
+      for (i = 0; i < TOTAL_PIXELS; i = i + 1) begin
+        buffer[i] <= 1'b0;
+      end
+      if (DEBUG != 0) $display("IMAGE_BUFFER: Clear buffer applied, write_addr set to 0");
+    end else if (write_enable && !buffer_full) begin
+      if (write_addr < TOTAL_PIXELS) begin
+        buffer[write_addr] <= (data_in != 8'd0);
+        write_addr <= write_addr + 1;
+        if (DEBUG != 0)
+          $display(
+              "IMAGE_BUFFER: Writing data %b at addr=%d, write_enable=%b",
+              (data_in != 8'd0),
+              write_addr,
+              write_enable
+          );
       end
     end
   end
 
-  // Force buffer status signals for correct test pass/fail
-  assign buffer_full = (write_addr >= 10'd784);  // Full when all pixels written
-  assign buffer_empty = (write_addr == 10'd0);  // Empty when pointer is at start
+  always_ff @(posedge clk) begin
+    if (write_addr > TOTAL_PIXELS) $fatal("Write address exceeded TOTAL_PIXELS!");
+  end
 
-  // Pass the stored image out to data_out port
-  assign data_out = buffer;
+
+  always_comb begin
+    debug_write_addr   = write_addr;
+    debug_buffer_full  = (write_addr == TOTAL_PIXELS);
+    debug_buffer_empty = (write_addr == 0);
+    debug_write_enable = write_enable;
+  end
+
+  assign buffer_full  = (write_addr == TOTAL_PIXELS);
+  assign buffer_empty = (write_addr == 0);
+
+  always_comb begin
+    for (int i = 0; i < TOTAL_PIXELS; i++) begin
+      data_out[i] = buffer[i];  // Assign each bit of the buffer to the unpacked array
+    end
+  end
+
 endmodule

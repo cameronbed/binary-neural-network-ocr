@@ -3,12 +3,12 @@
 `timescale 1ns / 1ps
 module bnn_module (
     input logic clk,
-    input logic reset,
+    input logic rst_n,  // Active low
     input logic [7:0] data_in,
     input logic write_enable,
     output logic result_ready,
     output logic [7:0] result_out,
-    input logic [7:0] img_in[0:27][0:27],
+    input logic img_in[0:783],
 
     // Debug outputs
     output logic [7:0] debug_data_in,       // Debug: input data
@@ -20,9 +20,9 @@ module bnn_module (
   // Add a module-level counter
   logic [31:0] counter;
 
-  always_ff @(posedge clk or posedge reset) begin
-    if (reset) begin
-      // Debug: Reset debug signals
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      // Debug: rst_n debug signals
       debug_data_in <= 8'd0;
       debug_write_enable <= 1'b0;
       debug_result_ready <= 1'b0;
@@ -37,11 +37,11 @@ module bnn_module (
   end
 
   // For testing only - add dummy logic to provide a result
-  always_ff @(posedge clk or posedge reset) begin
-    if (reset) begin
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
       result_out <= 8'd0;
       result_ready <= 1'b0;
-      counter <= 32'd0;  // Reset counter in reset block
+      counter <= 32'd0;  // rst_n counter in rst_n block
     end else begin
       // Simple test implementation - just return a value after some cycles
       if (counter < 20) begin

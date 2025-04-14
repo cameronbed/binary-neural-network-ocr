@@ -19,7 +19,13 @@ set(RTL_SOURCES
 
 # Set up paths
 set(TEST_NAME bnn_controller_tb)
-set(TESTBENCH_CPP ${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}.cpp)
+set(TESTBENCH_CPP 
+    ${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_spi_peripheral.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_bnn_controller.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_image_buffer.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_bnn_module.cpp
+)
 set(OBJ_DIR ${CMAKE_BINARY_DIR}/obj_dir)
 set(EXECUTABLE ${CMAKE_BINARY_DIR}/${TEST_NAME})
 

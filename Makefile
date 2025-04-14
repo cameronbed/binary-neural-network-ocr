@@ -2,15 +2,18 @@
 VIVADO := "C:/Xilinx/Vivado/2024.2/bin/vivado.bat"
 VIVADO_BIN := "C:/Xilinx/Vivado/2024.2/bin"
 
+# Verbose build option
+VERBOSE=1
+
 all:
 	@echo "Running CMake build..."
 	cmake -S . -B build
-	cmake --build build
+	cmake --build build -- VERBOSE=$(VERBOSE)
 
-# Run the test
+# Run the test with verbose output
 test: all
 	@echo "Running test..."
-	@./build/bnn_controller_tb
+	@./build/bnn_controller_tb || (echo "Test failed. Check the logs above for details." && exit 1)
 
 # Clean the build output
 clean:
