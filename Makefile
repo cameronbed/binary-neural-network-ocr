@@ -8,7 +8,7 @@ VERBOSE=1
 all:
 	@echo "Running CMake build..."
 	cmake -S . -B build
-	cmake --build build -- VERBOSE=$(VERBOSE)
+	cmake --build build
 
 # Run the test with verbose output
 test: all

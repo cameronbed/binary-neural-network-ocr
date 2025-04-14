@@ -13,7 +13,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(RTL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_controller.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/spi_peripheral.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/image_buffer.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module.sv
 )
 
@@ -21,10 +20,12 @@ set(RTL_SOURCES
 set(TEST_NAME bnn_controller_tb)
 set(TESTBENCH_CPP 
     ${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_spi_peripheral.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_bnn_controller.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_helpers.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_image_buffer.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_bnn_module.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_loop.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_result.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_restart.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_inference.cpp
 )
 set(OBJ_DIR ${CMAKE_BINARY_DIR}/obj_dir)
 set(EXECUTABLE ${CMAKE_BINARY_DIR}/${TEST_NAME})

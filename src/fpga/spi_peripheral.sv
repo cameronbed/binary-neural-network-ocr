@@ -1,16 +1,29 @@
 `timescale 1ns / 1ps
 module spi_peripheral (
-    input logic clk,  // System clock
-    input logic rst_n,  // Active-low reset
-    input logic SCLK,  // SPI clock
-    input logic COPI,  // Controller-out-Peripheral-In
-    input logic CS,  // Chip-select
+    input logic clk,   // System clock
+    input logic rst_n, // Active-low reset
+
+    // SPI
+    input  logic SCLK,  // SPI clock
+    input  logic COPI,  // Controller-out-Peripheral-In
+    input  logic CS,    // Chip-select
     output logic CIPO,  // Controller-in-Peripheral-Out
-    input logic [7:0] tx_byte,  // Byte to be transmitted
+
+    // Data
+    input  logic [7:0] tx_byte,  // Byte to be transmitted
     output logic [7:0] rx_byte,  // Captured received byte
-    output logic byte_valid,
-    output logic spi_error,  // Error indication
-    // Debug signals
+
+    // Control signals input
+    input logic byte_ready,
+    input logic rx_enable,
+    input logic tx_enable,
+
+    // Control signals output
+    output logic byte_valid,  // Output signal
+    output logic spi_error,   // Error indication
+
+    // ----------- DEBUG ----------------
+    input logic debug_enable,  // Debug enable signal
     output logic [1:0] debug_state,  // Debug: current state
     output logic [3:0] debug_bit_count,  // Debug: bit count
     output logic [7:0] debug_rx_byte  // Debug: received byte
@@ -18,183 +31,194 @@ module spi_peripheral (
   // Add parameters for SPI mode (CPOL/CPHA) and debug flag
   parameter logic CPOL = 0;
   parameter logic CPHA = 0;
-  parameter logic DEBUG = 0;  // Debug flag: 0 = off, 1 = on
 
   typedef enum logic [1:0] {
-    IDLE,
-    TRANSFER,
-    BYTE_READY
+    SPI_IDLE,
+    SPI_TRANSFER,
+    SPI_BYTE_READY
   } spi_state_t;
+
   spi_state_t state, next_state;
+  spi_state_t prev_state;  // To track the previous state for debugging
 
-  // Data Registers
-  logic [7:0] rx_shift_reg;  // Shift register to hold the incoming data
-  logic [7:0] rx_byte_next;
-  logic [7:0] tx_shift_reg;  // Shift register to hold the outgoing data
-  logic [3:0] bit_count;  // Change bit_count to 4 bits to match debug_bit_count
+  logic [7:0] rx_shift_reg, tx_shift_reg;
+  logic [3:0] bit_count;
 
-  // SCLK signals
+  logic sclk_rising;
+  logic sclk_falling;  // For detecting falling edge of SCLK
+
   logic sclk_sync_0, sclk_sync_1, sclk_sync_2;
-  logic sclk_prev;
-  logic sclk_rising, sclk_falling;
-
-  // Add synchronizers for CS and COPI signals
   logic cs_sync_0, cs_sync_1, cs_sync_2;
   logic copi_sync_0, copi_sync_1, copi_sync_2;
 
-  // Add internal drive for CIPO and tri-state assignment
-  logic cipo_drive;
-  assign CIPO = (!cs_sync_2) ? cipo_drive : 1'bz;
+  logic shift_edge, sample_edge;
 
-  // Timeout counter for detecting stalled transfers
+  logic cipo_drive;
+  logic cipo_internal;  // Internal signal for CIPO
+
+  assign CIPO = cipo_internal;  // Directly assign the internal signal to CIPO
+
   logic [7:0] timeout_counter;
   localparam TIMEOUT_LIMIT = 8'd200;
 
-  // always_ff block to synchronize SCLK with the system clock
+  logic incomplete_transfer;
+
+  // ------------------------ Synchronize SCLK -----------------------
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       sclk_sync_0 <= CPOL;
       sclk_sync_1 <= CPOL;
       sclk_sync_2 <= CPOL;
-      sclk_prev   <= CPOL;
-    end else begin
-      sclk_sync_0 <= SCLK;  // waiting three clock cycles to synchronize SCLK
-      sclk_sync_1 <= sclk_sync_0;
-      sclk_sync_2 <= sclk_sync_1;
-      sclk_prev   <= sclk_sync_2;
-    end
-  end
-  assign sclk_rising = (CPOL == 0) ? (sclk_sync_1 && !sclk_sync_2) : (!sclk_sync_1 && sclk_sync_2);
-  assign sclk_falling = (CPOL == 0) ? (!sclk_sync_1 && sclk_sync_2) : (sclk_sync_1 && !sclk_sync_2);
-
-  // Add new always_ff block to synchronize CS and COPI signals
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      cs_sync_0   <= 1'b1;  // inactive (active-low)
-      cs_sync_1   <= 1'b1;
-      cs_sync_2   <= 1'b1;
+      cs_sync_0 <= 1'b1;
+      cs_sync_1 <= 1'b1;
+      cs_sync_2 <= 1'b1;
       copi_sync_0 <= 1'b0;
       copi_sync_1 <= 1'b0;
       copi_sync_2 <= 1'b0;
+      // Ensure COPI is reset
+      cipo_internal <= 1'b0;  // Reset internal CIPO signal
     end else begin
+      sclk_sync_0 <= SCLK;
+      sclk_sync_1 <= sclk_sync_0;
+      sclk_sync_2 <= sclk_sync_1;
       cs_sync_0   <= CS;
       cs_sync_1   <= cs_sync_0;
-      cs_sync_2   <= cs_sync_1;  // filtered CS signal used below
+      cs_sync_2   <= cs_sync_1;
       copi_sync_0 <= COPI;
       copi_sync_1 <= copi_sync_0;
-      copi_sync_2 <= copi_sync_1;  // filtered COPI signal used below
+      copi_sync_2 <= copi_sync_1;
+
+      // Drive CIPO based on chip select and cipo_drive
+      if (!cs_sync_2) begin
+        cipo_internal <= cipo_drive;
+      end else begin
+        cipo_internal <= 1'b0;  // Default to 0 when CS is inactive
+      end
     end
   end
 
-  // always_ff block to handle the SPI communication and FSM
+  assign sclk_rising = (CPOL == 0) ? (sclk_sync_1 && !sclk_sync_2) : (!sclk_sync_1 && sclk_sync_2);
+  assign sclk_falling = (CPOL == 0) ? (!sclk_sync_1 && sclk_sync_2) : (sclk_sync_1 && !sclk_sync_2);
+
+  // ------------------------ Phase Control Logic ------------------------
+  assign shift_edge = (CPHA == 0) ? sclk_rising : sclk_falling;
+  assign sample_edge = (CPHA == 0) ? sclk_falling : sclk_rising;
+
+  // ----------------------- FSM State Control -----------------------
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      state           <= IDLE;
-      rx_shift_reg    <= 8'd0;
-      tx_shift_reg    <= 8'd0;
-      bit_count       <= 4'd0;
-      cipo_drive      <= 1'b0;
-      rx_byte         <= 8'd0;
-      byte_valid      <= 1'b0;
-      spi_error       <= 1'b0;
+      state <= SPI_IDLE;
+      incomplete_transfer <= 1'b0;  // Initialize here
+    end else begin
+      state <= next_state;
+
+      // Handle incomplete_transfer in the same block
+      if (state == SPI_TRANSFER && cs_sync_2 && bit_count < 8) begin
+        incomplete_transfer <= 1'b1;
+      end else if (state == SPI_IDLE) begin
+        incomplete_transfer <= 1'b0;
+      end
+    end
+  end
+
+  // ------------------------ Timeout/Watchdog Logic ------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
       timeout_counter <= 0;
-      // Debug signals
-      debug_state     <= 2'b00;
+      spi_error <= 1'b0;
+    end else if (state == SPI_TRANSFER) begin
+      if (timeout_counter < TIMEOUT_LIMIT) timeout_counter <= timeout_counter + 1;
+      else begin
+        timeout_counter <= 0;
+        spi_error <= 1'b1;
+      end
+    end else begin
+      timeout_counter <= 0;
+      spi_error <= 1'b0;  // Reset spi_error explicitly when not in TRANSFER
+    end
+  end
+
+  // ------------------------ Shift Register Logic ------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rx_shift_reg <= 8'd0;
+      tx_shift_reg <= 8'd0;
+      bit_count    <= 4'd0;
+      cipo_drive   <= 1'b0;
+      byte_valid   <= 1'b0; // Ensure byte_valid is reset
+    end else begin
+      if (state == SPI_IDLE) begin
+        bit_count  <= 0;
+        byte_valid <= 1'b0;  // Reset byte_valid in IDLE state
+        if (byte_ready) tx_shift_reg <= tx_byte;
+      end
+
+      // Preload CIPO on CS falling edge if CPHA=1
+      if (!cs_sync_2 && cs_sync_1 && tx_enable && CPHA) begin
+        cipo_drive <= tx_byte[7];
+      end
+
+      // Separate edges for RX (sample_edge) and TX (shift_edge)
+      if (sample_edge && state == SPI_TRANSFER && !cs_sync_2 && bit_count < 8 && rx_enable) begin
+        rx_shift_reg <= {rx_shift_reg[6:0], copi_sync_2};
+        $display("[DEBUG] Received bit: %b, Updated rx_shift_reg: %b, Bit count: %0d", copi_sync_2,
+                 rx_shift_reg, bit_count);
+      end
+      if (shift_edge && state == SPI_TRANSFER && !cs_sync_2 && bit_count < 8 && tx_enable) begin
+        cipo_drive   <= tx_shift_reg[7];
+        tx_shift_reg <= {tx_shift_reg[6:0], 1'b0};
+        bit_count    <= bit_count + 1;
+      end
+
+      // Complete byte transfer
+      if (bit_count == 8 && state == SPI_TRANSFER) begin
+        byte_valid <= 1'b1;
+        $display("[TRACE] Byte transfer complete. rx_shift_reg=%b, time=%0t", rx_shift_reg, $time);
+      end else if (cs_sync_2) begin
+        byte_valid <= 1'b0;  // Hold byte_valid until CS goes high
+      end
+    end
+  end
+
+  // ------------------------ Byte Completion ------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rx_byte <= 8'd0;
+    end else if (state == SPI_BYTE_READY && rx_enable) begin
+      rx_byte <= rx_shift_reg;  // Consolidate rx_byte write here
+    end
+  end
+
+  // ------------------------- DEBUG Signal Outputs -----------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      debug_state     <= SPI_IDLE;
       debug_bit_count <= 4'd0;
       debug_rx_byte   <= 8'd0;
     end else begin
-      // Update debug signals
       debug_state     <= state;
       debug_bit_count <= bit_count;
-      debug_rx_byte   <= rx_byte;
-
-      // Increment timeout in TRANSFER state; reset otherwise
-      if (state == TRANSFER) timeout_counter <= timeout_counter + 8'd1;
-      else timeout_counter <= 8'd0;
-
-      // Timeout check
-      if (timeout_counter >= TIMEOUT_LIMIT) begin
-        spi_error <= 1'b1;
-        state <= IDLE;
-        timeout_counter <= 0;
-        if (DEBUG) $display("[SPI_PERIPH] Timeout error, resetting FSM at time=%0t", $time);
-      end
-
-      case (state)
-        IDLE: begin
-          bit_count    <= 4'd0;
-          rx_shift_reg <= 8'd0;
-          byte_valid   <= 1'b0;
-          if (!cs_sync_2) begin  // CS active low
-            state        <= TRANSFER;
-            tx_shift_reg <= tx_byte;
-            if (DEBUG) $display("[SPI_PERIPH] Transition IDLE -> TRANSFER at time=%0t", $time);
-          end
-        end
-
-        TRANSFER: begin
-          byte_valid <= 1'b0;  // Ensure byte_valid remains deasserted during transfer
-          if (sclk_rising) begin
-            logic [7:0] new_rx;
-            new_rx = {rx_shift_reg[6:0], copi_sync_2};
-            rx_shift_reg <= new_rx;
-            if (DEBUG)
-              $display(
-                  "[SPI_PERIPH] SCLK rising: CS=%b, COPI=%b, bit_count=%0d, new_rx=%h, time=%0t",
-                  cs_sync_2,
-                  copi_sync_2,
-                  bit_count,
-                  new_rx,
-                  $time
-              );
-            if (bit_count == 4'd7) begin
-              rx_byte   <= new_rx;
-              // Transition to new state to hold byte_valid for one full cycle
-              state     <= BYTE_READY;
-              bit_count <= 4'd0;
-              if (DEBUG)
-                $display(
-                    "[SPI_PERIPH] BYTE VALID! Completed 8 bits, rx_byte=%h at time=%0t",
-                    new_rx,
-                    $time
-                );
-            end else begin
-              bit_count <= bit_count + 4'd1;
-              if (DEBUG) $display("[SPI_PERIPH] Incremented bit_count to %0d", bit_count + 1);
-            end
-          end
-
-          if (sclk_falling) begin
-            cipo_drive   <= tx_shift_reg[7];
-            tx_shift_reg <= {tx_shift_reg[6:0], 1'b0};
-          end
-
-          if (cs_sync_2) begin
-            state <= IDLE;
-            if (DEBUG) $display("[SPI_PERIPH] Transfer aborted, CS inactive at time=%0t", $time);
-          end
-        end
-
-        BYTE_READY: begin
-          // Hold byte_valid high for one full clock cycle
-          byte_valid <= 1'b1;
-          // Prepare for next byte transfer: reset counter
-          bit_count <= 4'd0;
-          // Remain in TRANSFER if CS still active, else go to IDLE
-          state <= (!cs_sync_2) ? TRANSFER : IDLE;
-        end
-
-        default: begin
-          state     <= IDLE;
-          spi_error <= 1'b1;
-          if (DEBUG)
-            $display("[SPI_PERIPH] Unknown state encountered; resetting FSM at time=%0t", $time);
-        end
-      endcase
+      debug_rx_byte   <= rx_shift_reg;
     end
   end
 
-  // No longer need the separate comb logic since we handle transitions directly
-  assign next_state = state;  // For compatibility
+  // ------------------------ FSM Next-State Logic ------------------------
+  always_comb begin
+    next_state = state;
+    case (state)
+      SPI_IDLE: begin
+        if (!cs_sync_2 && byte_ready) next_state = SPI_TRANSFER;
+      end
+      SPI_TRANSFER: begin
+        if (bit_count == 4'd7 && shift_edge) next_state = SPI_BYTE_READY;  // Fix off-by-one
+        else if (cs_sync_2) next_state = SPI_IDLE;
+      end
+      SPI_BYTE_READY: begin
+        if (!cs_sync_2) next_state = SPI_TRANSFER;
+        else next_state = SPI_IDLE;
+      end
+      default: next_state = SPI_IDLE;  // Add default case
+    endcase
+  end
 
 endmodule
