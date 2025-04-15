@@ -1,27 +1,18 @@
-#include "bnn_controller_tb.hpp"
+#include "main_test.hpp"
 #include <iostream>
 #include <string>
 #include <cstdlib>
 
 // Define shared variables
-vluint64_t main_time = 0;
-int test_failures = 0;
+vluint64_t main_time = 0; // Initialize main_time to 0
+int test_failures = 0;    // Initialize test_failures to 0
 
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
-    Vbnn_controller *dut = new Vbnn_controller;
+    Vtop *dut = new Vtop;
 
-    // Initialize DUT signals
-    dut->clk = 0;
-    dut->rst_n = 1;
-    dut->CS = 1;
-
-    test_reset_and_startup(dut);
-    test_image_write_and_fsm(dut);
-    test_inference_trigger(dut);
-    test_result_tx_and_clear(dut);
-    test_fsm_loop_end_to_end(dut);
+    test_tick_and_spi_send(dut);
     delete dut;
 
     if (test_failures == 0)

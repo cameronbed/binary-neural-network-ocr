@@ -1,4 +1,4 @@
-#include "bnn_controller_tb.hpp"
+#include "main_test.hpp"
 
 #include <iostream>
 #include <string>
@@ -7,7 +7,7 @@
 #include <stdexcept> // For std::invalid_argument
 #include <iomanip>   // Added for std::setw and std::setfill
 
-void tick(Vbnn_controller *dut, VerilatedVcdC *tfp = nullptr, int *timestamp = nullptr, int n = 1)
+void tick(Vtop *dut, VerilatedVcdC *tfp = nullptr, int *timestamp = nullptr, int n = 1)
 {
     if (!dut)
         return;
@@ -30,7 +30,24 @@ void tick(Vbnn_controller *dut, VerilatedVcdC *tfp = nullptr, int *timestamp = n
     }
 }
 
-void spi_send_byte(Vbnn_controller *dut, uint8_t byte, int mode,
+void tick(Vtop *dut, int n)
+{
+    if (!dut)
+        return;
+
+    for (int i = 0; i < n; ++i)
+    {
+        for (int edge = 0; edge < 2; ++edge) // One full clock cycle
+        {
+            dut->clk = !dut->clk;
+            dut->eval();
+
+            main_time += 5; // Increment main_time for each edge
+        }
+    }
+}
+
+void spi_send_byte(Vtop *dut, uint8_t byte, int mode,
                    VerilatedVcdC *tfp, int *timestamp, bool verbose)
 {
     if (!dut)
@@ -105,7 +122,7 @@ void spi_send_byte(Vbnn_controller *dut, uint8_t byte, int mode,
     tick(dut, tfp, timestamp, 2);
 }
 
-void test_tick_and_spi_send(Vbnn_controller *dut)
+void test_tick_and_spi_send(Vtop *dut)
 {
     std::cout << "\n[TEST] test_tick_and_spi_send...\n";
 
@@ -134,6 +151,10 @@ void test_tick_and_spi_send(Vbnn_controller *dut)
             uint8_t byte = static_cast<uint8_t>(val);
             std::cout << "[SEND] Byte: 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)byte << std::dec << "\n";
 
+            if(val == 0xf9) debug(dut);
+            if(val == 0xfa) debug(dut);
+            if(val == 0xfb) debug(dut);
+
             spi_send_byte(dut, byte, mode, tfp, &timestamp, false); // Explicitly pass verbose
 
             // Confirm SCLK returns to idle (CPOL)
@@ -150,4 +171,15 @@ void test_tick_and_spi_send(Vbnn_controller *dut)
     tick(dut, tfp, &timestamp, 2);
 
     std::cout << "[TEST] test_tick_and_spi_send PASSED ✅\n";
+}
+
+void debug(Vtop *dut)
+{
+    tick(dut, 1);
+    dut->debug_trigger = 1;
+    dut->eval();
+    tick(dut, 1);
+    dut->debug_trigger = 0;
+    dut->eval();
+    tick(dut, 1);
 }

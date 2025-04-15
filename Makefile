@@ -13,7 +13,7 @@ all:
 # Run the test with verbose output
 test: all
 	@echo "Running test..."
-	@./build/bnn_controller_tb || (echo "Test failed. Check the logs above for details." && exit 1)
+	@./build/main_test || (echo "Test failed. Check the logs above for details." && exit 1)
 
 # Clean the build output
 clean:
