@@ -10,7 +10,7 @@
         result: the classification result, since we are currently classifing digits, this value can range from 0 - 9.
 */
 
-module Binary_Neural_Network_Top (
+module BNN_top (
     input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in [0:CONV1_IC-1],
     output logic [OUTPUT_BIT-1:0] result;
 );
@@ -30,7 +30,8 @@ module Binary_Neural_Network_Top (
     assign conv1_img_in = img_in;
     logic [CONV1_IC*9-1:0] conv1_weights [0:CONV1_OC-1] = {9'hde, 9'h183, 9'h98, 9'h3e, 9'h1d6, 9'h6e, 9'h17c, 9'hf9, 9'hc9, 9'h18a};
     logic [CONV1_OC*9-1:0] conv2_weights [0:CONV2_OC-1] = {90'h1eecfbdb3c7b7800819e, 90'h224e92fb00d30024868, 90'h5a00381c70144e800003d, 90'h882d020940a259200179, 90'hb8e07048ff6638000182, 90'h2ffcda1933be868401a8, 90'he1b86120106c28800b0, 90'hf4e1b0881d2e444001b6};
-    logic signed [15:0] fc_weights [0:FC_IC*FC_OC-1] = {16'hfffb, 16'h10, 16'h6, 16'h47, 16'h1e, 16'h0, 16'hffef, 16'hffe3, 16'hffce, 16'hffcb, 16'h2, 16'hfffc, 
+    logic signed [15:0] fc_weights [0:FC_IC*FC_OC-1] = {16'hfffb, 16'h10, 16'h6, 16'h47, 16'h1e, 16'h0, 16'hffef,       
+                                                     16'hffe3, 16'hffce, 16'hffcb, 16'h2, 16'hfffc, 
                                                      16'hffe2, 16'hff8f, 16'hff9d, 16'hffbb, 16'hff97, 16'h0, 16'hffea, 16'hffc2, 16'hff99, 16'hff6c, 16'hff4a, 
                                                      16'hffed, 16'hffe3, 16'h25, 16'hffa0, 16'hff79, 16'hffa9, 16'hffee, 16'hffe8, 16'h4a, 16'h30, 16'h3b, 16'h26, 
                                                      16'h1b, 16'h3, 16'hffdd, 16'h1d, 16'h12, 16'hffcd, 16'hfff8, 16'ha, 16'h7, 16'h14, 16'hb9, 16'h88, 16'h4, 16'h68, 
