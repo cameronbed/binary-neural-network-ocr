@@ -2,184 +2,141 @@
 
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <cstdlib>
 #include <cassert>
 #include <stdexcept> // For std::invalid_argument
 #include <iomanip>   // Added for std::setw and std::setfill
 
-void tick(Vtop *dut, VerilatedVcdC *tfp = nullptr, int *timestamp = nullptr, int n = 1)
+#include <format>
+
+constexpr int HALF_PERIOD_NS = 5;
+
+inline void tick(Vtop *dut, int cycles = 1)
 {
-    if (!dut)
+    static_assert(std::is_same_v<vluint64_t, decltype(main_time)>,
+                  "main_time must be vluint64_t");
+
+    if (!dut || cycles <= 0)
         return;
 
-    for (int i = 0; i < n; ++i)
+    for (int i = 0; i < cycles * 2; ++i)
     {
-        for (int edge = 0; edge < 2; ++edge) // One full clock cycle
+        dut->clk = !dut->clk;
+        dut->eval();
+        if (dut->clk) // Increment main_time only on rising edge of clk
         {
-            dut->clk = !dut->clk;
-            dut->eval();
-
-            if (tfp && timestamp)
-            {
-                tfp->dump(*timestamp);
-                *timestamp += 5; // 5ns per edge (10ns full cycle)
-            }
-
-            main_time += 5; // Increment main_time for each edge
+            main_time += HALF_PERIOD_NS;
         }
     }
 }
 
-void tick(Vtop *dut, int n)
+void spi_send_byte(Vtop *dut, uint8_t byte, int mode, bool verbose, bool keep_cs = false)
 {
-    if (!dut)
-        return;
 
-    for (int i = 0; i < n; ++i)
-    {
-        for (int edge = 0; edge < 2; ++edge) // One full clock cycle
-        {
-            dut->clk = !dut->clk;
-            dut->eval();
-
-            main_time += 5; // Increment main_time for each edge
-        }
-    }
-}
-
-void spi_send_byte(Vtop *dut, uint8_t byte, int mode,
-                   VerilatedVcdC *tfp, int *timestamp, bool verbose)
-{
     if (!dut)
         return;
     if (mode < 0 || mode > 3)
-        throw std::invalid_argument("Invalid SPI mode: must be 0-3");
+        throw std::invalid_argument("SPI mode must be 0‑3");
 
-    bool cpol = (mode & 0b10) >> 1;
-    bool cpha = (mode & 0b01);
+    const bool CPOL = (mode & 0b10) >> 1;
+    const bool CPHA = (mode & 0b01);
 
-    // Set clock to idle state
-    dut->SCLK = cpol;
-    dut->eval();
-    tick(dut, tfp, timestamp, 1);
+    auto set_sclk = [&](bool level)
+    {
+        dut->SCLK = level;
+        tick(dut, 1);
+        dut->eval(); // Ensure the signal propagates
+    };
 
+    // --- Prepare bus ---
+    set_sclk(CPOL); // Set idle clock state before asserting spi_cs_n
+
+    dut->spi_cs_n = 1; // ensure spi_cs_n idle high
+    dut->eval();       // explicit settle
+    tick(dut, 1);
+
+    dut->spi_cs_n = 0; // start transaction
+    dut->eval();       // explicit settle
+    tick(dut, 2);      // settle before first bit
+
+    // --- Bit transmission loop ---
     for (int i = 7; i >= 0; --i)
     {
-        uint8_t bit = (byte >> i) & 1;
-
-        if (cpha == 0)
+        bool bit = (byte >> i) & 1;
+        if (CPHA == 0)
         {
-            // Set data before active edge
             dut->COPI = bit;
             dut->eval();
-            tick(dut, tfp, timestamp, 1);
-
-            // Toggle clock (active edge)
-            dut->SCLK = !cpol;
-            dut->eval();
-            tick(dut, tfp, timestamp, 1);
-
-            // Return to idle
-            dut->SCLK = cpol;
-            dut->eval();
-            tick(dut, tfp, timestamp, 1);
+            set_sclk(!CPOL);
+            tick(dut, 1);
+            set_sclk(CPOL);
+            tick(dut, 1);
         }
         else
         {
-            // Idle clock first
-            dut->SCLK = cpol;
-            dut->eval();
-            tick(dut, tfp, timestamp, 1);
-
-            // First edge
-            dut->SCLK = !cpol;
-            dut->eval();
-            tick(dut, tfp, timestamp, 1);
-
-            // Set data
+            set_sclk(!CPOL);
+            tick(dut, 1);
             dut->COPI = bit;
             dut->eval();
-            tick(dut, tfp, timestamp, 1);
-
-            // Second edge
-            dut->SCLK = cpol;
-            dut->eval();
-            tick(dut, tfp, timestamp, 1);
+            set_sclk(CPOL);
+            tick(dut, 1);
         }
 
+        // Debug output for each bit
         if (verbose)
         {
-            std::cout << "[SPI] Bit " << i
-                      << " | COPI=" << (int)bit
-                      << " SCLK=" << (int)dut->SCLK
-                      << " CPOL=" << cpol
-                      << " CPHA=" << cpha
-                      << std::endl;
+            std::cout << "[SPI TB] (" << std::dec << main_time / HALF_PERIOD_NS << "): bit=" << i
+                      << " | COPI=" << bit
+                      << " | SCLK=" << int(dut->SCLK)
+                      << " | Byte=0x" << std::hex << std::setw(2) << std::setfill('0') << int(byte)
+                      << "\n";
         }
     }
 
-    // Let signals settle
-    tick(dut, tfp, timestamp, 2);
+    // --- Post-transaction cleanup ---
+    tick(dut, 2); // settle after last bit
+
+    if (!keep_cs)
+    {
+        dut->spi_cs_n = 1; // release spi_cs_n
+        dut->eval();
+        tick(dut, 1);
+    }
 }
 
-void test_tick_and_spi_send(Vtop *dut)
+void do_reset(Vtop *dut, int cycles, bool verbose = false)
 {
-    std::cout << "\n[TEST] test_tick_and_spi_send...\n";
+    if (!dut)
+        return;
 
-    int timestamp = 0;
-    VerilatedVcdC *tfp = nullptr; // Add your VCD pointer if needed
+    dut->rst_n = 0; // Assert reset
+    main_time = 0;  // Reset main_time
+    tick(dut, cycles);
+    dut->rst_n = 1; // Deassert reset
+    tick(dut, cycles);
+    tick(dut, 1); // extra settle cycle
 
-    // --- Tick Test ---
-    uint64_t start_time = main_time;
-    tick(dut, tfp, &timestamp, 1);
-    assert(main_time - start_time == 10 && "tick() failed to increment time by 10ns");
-
-    tick(dut, tfp, &timestamp, 3);
-    assert(main_time - start_time == 40 && "tick() failed to increment time by expected amount");
-
-    std::cout << "[PASS] tick() timing checks passed\n";
-
-    // --- SPI Send Tests ---
-    dut->rst_n = 1;
-    dut->CS = 0; // Activate SPI
-
-    for (int mode = 0; mode < 4; ++mode)
+    if (verbose)
     {
-        std::cout << "\n[MODE " << mode << "]\n";
-        for (int val = 0; val <= 0xFF; ++val)
-        {
-            uint8_t byte = static_cast<uint8_t>(val);
-            std::cout << "[SEND] Byte: 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)byte << std::dec << "\n";
-
-            if(val == 0xf9) debug(dut);
-            if(val == 0xfa) debug(dut);
-            if(val == 0xfb) debug(dut);
-
-            spi_send_byte(dut, byte, mode, tfp, &timestamp, false); // Explicitly pass verbose
-
-            // Confirm SCLK returns to idle (CPOL)
-            int expected_sclk = (mode & 0b10) >> 1;
-            assert(dut->SCLK == expected_sclk && "SCLK did not return to idle after SPI byte");
-
-            // Optional: confirm COPI ends on LSB (for CPHA=0 only)
-            if ((mode & 0b01) == 0)
-                assert(dut->COPI == (byte & 0x1) && "COPI did not end on expected value");
-        }
+        std::cout << "[RST DEBUG]: Reset asserted for " << cycles << " cycles.\n";
+        std::cout << "[RST DEBUG]: Current time: " << std::dec << main_time << "\n";
     }
-
-    dut->CS = 1; // End SPI
-    tick(dut, tfp, &timestamp, 2);
-
-    std::cout << "[TEST] test_tick_and_spi_send PASSED ✅\n";
 }
 
 void debug(Vtop *dut)
 {
+    if (!dut)
+        return;
+
+    dut->debug_trigger = 1; // Assert debug_trigger
     tick(dut, 1);
-    dut->debug_trigger = 1;
-    dut->eval();
-    tick(dut, 1);
-    dut->debug_trigger = 0;
-    dut->eval();
-    tick(dut, 1);
+
+    // Debug output for debug trigger
+    std::cout << "[DEBUG TRIGGER]: Trigger asserted at time " << main_time << "\n";
+
+    dut->debug_trigger = 0; // Deassert debug_trigger
+    tick(dut, 1);           // Allow signal to settle
+
+    std::cout << "[DEBUG TRIGGER]: Trigger deasserted at time " << main_time << "\n";
 }

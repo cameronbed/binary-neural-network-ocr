@@ -1,231 +1,264 @@
 `timescale 1ns / 1ps
+
 module spi_peripheral #(
     parameter logic CPOL = 0,
-    parameter logic CPHA = 0,
-    parameter int SPI_FRAME_BITS = 8  // Change to int for proper width
+    parameter logic CPHA = 0
 ) (
-    input logic clk,   // System clock
-    input logic rst_n, // Active-low reset
+    input logic clk,
+    input logic rst_n,
+    // SPI pins
+    input logic SCLK,
+    input logic COPI,
+    input logic spi_cs_n,
 
-    // SPI
-    input  logic SCLK,
-    input  logic COPI,
-    input  logic CS,
-    output logic CIPO,
+    // Data interface
+    output logic [7:0] spi_rx_data,
 
-    // Data
-    input  logic [7:0] tx_byte,  // Byte to be transmitted
-    output logic [7:0] rx_byte,  // Captured received byte
-
-    // Control signals input
-    input logic rx_enable,
-    input logic tx_enable,
-    input logic byte_ready,
-
-    // Control signals output
-    output logic byte_valid,
-    output logic spi_error
+    // Control Signals
+    input  logic rx_enable,
+    output logic spi_byte_valid,
+    input  logic byte_taken
 );
-  typedef enum logic [1:0] {
+  // -------------------- Local Parameters
+  localparam SPI_FRAME_BITS = 8;  // Fixed to 8 bits for SPI
+  localparam IMG_BYTE_COUNT = 113;  // Fixed to 1024 bytes for image buffer
+  localparam int SPI_TIMEOUT_LIMIT = 32'd10000;  // timeout cycles
+
+  // -------- FSM States
+  typedef enum logic [2:0] {  // Increase state width for new state
     SPI_IDLE,
     SPI_RX,
-    SPI_TX
+    SPI_PROCESS,
+    SPI_IMG_RX,
+    SPI_DONE,
+    SPI_WAIT  // new state added for handshake delay
   } spi_state_t;
-  spi_state_t spi_state, spi_next_state, spi_prev_state;
 
-  logic [7:0] rx_shift_reg;
-  logic [7:0] tx_shift_reg;  // Separate declaration for clarity
-  logic [31:0] rx_bit_count, tx_bit_count;  // Extend to 32 bits for proper width matching
+  spi_state_t spi_state, spi_next_state;
 
-  logic sclk_rising, sclk_falling;  // For detecting falling edge of SCLK
-
+  // Synchronizers
   logic sclk_sync_0, sclk_sync_1, sclk_sync_2;
   logic cs_sync_0, cs_sync_1, cs_sync_2;
   logic copi_sync_0, copi_sync_1, copi_sync_2;
 
-  logic shift_edge, sample_edge;
+  // Shifting
+  logic [7:0] rx_shift_reg;
+  logic [3:0] bit_cnt;
 
-  logic cipo_drive;
-  logic cipo_internal;  // Internal signal for CIPO
+  // Control Signals
+  logic shift_rx;
+  logic byte_valid_int;
 
-  assign CIPO = cipo_internal;  // Directly assign the internal signal to CIPOf
+  logic spi_active;
+  logic rx_mode;
 
-  logic incomplete_transfer;
+  assign spi_active = (cs_sync_2 == 1'b0);
+  assign rx_mode    = rx_enable && spi_active;
 
-  // ----------------------- FSM State Control -----------------------
+  logic [7:0] img_buffer[0:IMG_BYTE_COUNT-1];
+  logic [$clog2(IMG_BYTE_COUNT)-1:0] img_byte_cnt;  // Adjust width to match IMG_BYTE_COUNT
+  logic [31:0] spi_timeout_cnt;  // timeout counter
+
+  //===================================================
+  // Input Synchronization
+  //===================================================
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      spi_state <= SPI_IDLE;
-      incomplete_transfer <= 1'b0;  // Initialize here
-    end else begin
-      spi_state <= spi_next_state;
-
-      case (spi_state)
-        SPI_IDLE: begin
-          // Reset signals in IDLE state
-          incomplete_transfer <= 1'b0;  // Reset incomplete_transfer in IDLE state
-          cipo_drive          <= 1'b0;  // Reset CIPO drive signal
-        end
-
-        SPI_RX: begin
-          // Handle RX state logic
-          if (byte_valid) begin
-            rx_byte <= rx_shift_reg;  // Capture received byte
-            incomplete_transfer <= 1'b0;  // Reset incomplete_transfer on byte valid
-          end else begin
-            incomplete_transfer <= 1'b1;  // Set incomplete_transfer if not valid
-          end
-        end
-
-        SPI_TX: begin
-          // Handle TX state logic
-          if (byte_ready) begin
-            cipo_drive <= tx_shift_reg[7];  // Drive CIPO with the most significant bit of tx_shift_reg
-            incomplete_transfer <= 1'b0;  // Reset incomplete_transfer on byte ready
-          end else begin
-            incomplete_transfer <= 1'b1;  // Set incomplete_transfer if not ready
-          end
-        end
-
-        default: spi_error <= 1'b1;  // Set error flag for unexpected states
-      endcase
-    end
-  end
-
-  // ------------------------ Shift Register Logic ------------------------
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      rx_shift_reg <= 8'd0;
-      tx_shift_reg <= 8'd0;  // Use non-blocking assignment consistently
-      tx_bit_count <= 32'd0;
-      rx_bit_count <= 32'd0;
-      cipo_drive <= 1'b0;
-      byte_valid <= 1'b0;
-      rx_byte <= 8'd0;
-    end
-
-    // Preload CIPO on CS falling edge if CPHA = 1
-    if (!cs_sync_2 && cs_sync_1 && tx_enable && CPHA) begin
-      tx_shift_reg <= tx_byte;  // Use non-blocking assignment
-      cipo_drive   <= tx_byte[7];
-    end
-
-    case (spi_state)
-      SPI_IDLE: begin
-        rx_shift_reg <= 8'd0;
-        tx_shift_reg <= 8'd0;  // Use non-blocking assignment
-        tx_bit_count <= 32'd0;
-        rx_bit_count <= 32'd0;
-        cipo_drive   <= 1'b0;
-
-        if (byte_ready) begin
-          tx_shift_reg <= tx_byte;  // Use non-blocking assignment
-          if (!CPHA) begin
-            cipo_drive <= tx_byte[7];
-          end
-        end
-      end
-
-      // ---------------- RX ----------------
-      SPI_RX: begin
-        if (sample_edge && !cs_sync_2 && rx_enable && rx_bit_count < SPI_FRAME_BITS) begin
-          rx_shift_reg <= {rx_shift_reg[6:0], copi_sync_2};
-          rx_bit_count <= rx_bit_count + 1;
-
-          // On final bit, capture full byte
-          if (rx_bit_count == SPI_FRAME_BITS - 1) begin
-            rx_byte    <= {rx_shift_reg[6:0], copi_sync_2};
-            byte_valid <= 1'b1;  // Ensure this is asserted
-          end else begin
-            byte_valid <= 1'b0;  // Deassert otherwise
-          end
-        end
-      end
-
-      // ---------------- TX ----------------
-      SPI_TX: begin
-        if (shift_edge && !cs_sync_2 && tx_enable && tx_bit_count < SPI_FRAME_BITS) begin
-          cipo_drive   <= tx_shift_reg[6];
-          tx_shift_reg <= {tx_shift_reg[6:0], 1'b0};  // Ensure proper width
-          tx_bit_count <= tx_bit_count + 1;
-        end
-      end
-
-      default: spi_error <= 1'b1;
-    endcase
-  end
-
-  // ------------------------ FSM Next-State Logic ------------------------
-  always_comb begin
-    spi_next_state = spi_state;
-
-    case (spi_state)
-      // ---------- IDLE ----------
-      SPI_IDLE: begin
-        if (!cs_sync_2) begin
-          if (rx_enable) spi_next_state = SPI_RX;
-          else if (tx_enable) spi_next_state = SPI_TX;
-        end
-      end
-
-      // ---------- RX ----------
-      SPI_RX: begin
-        if (cs_sync_2 || rx_bit_count == SPI_FRAME_BITS) begin
-          spi_next_state = SPI_IDLE;
-        end
-      end
-
-      // ---------- TX ----------
-      SPI_TX: begin
-        if (cs_sync_2 || tx_bit_count == SPI_FRAME_BITS) begin
-          spi_next_state = SPI_IDLE;
-        end
-      end
-
-      default: ;  // Add default case to handle incomplete coverage
-    endcase
-  end
-
-
-  // ------------------------ Synchronize SCLK -----------------------
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      sclk_sync_0 <= CPOL;
-      sclk_sync_1 <= CPOL;
-      sclk_sync_2 <= CPOL;
-      cs_sync_0 <= 1'b1;
-      cs_sync_1 <= 1'b1;
-      cs_sync_2 <= 1'b1;
-      copi_sync_0 <= 1'b0;
-      copi_sync_1 <= 1'b0;
-      copi_sync_2 <= 1'b0;
-      // Ensure COPI is reset
-      cipo_internal <= 1'b0;  // Reset internal CIPO signal
+      {sclk_sync_0, sclk_sync_1, sclk_sync_2} <= {CPOL, CPOL, CPOL};
+      {cs_sync_0, cs_sync_1, cs_sync_2}       <= 3'b111;
+      {copi_sync_0, copi_sync_1, copi_sync_2} <= 3'b000;
     end else begin
       sclk_sync_0 <= SCLK;
       sclk_sync_1 <= sclk_sync_0;
       sclk_sync_2 <= sclk_sync_1;
-      cs_sync_0   <= CS;
+
+      cs_sync_0   <= spi_cs_n;
       cs_sync_1   <= cs_sync_0;
       cs_sync_2   <= cs_sync_1;
+
       copi_sync_0 <= COPI;
       copi_sync_1 <= copi_sync_0;
       copi_sync_2 <= copi_sync_1;
+    end
+  end
 
-      // Drive CIPO based on chip select and cipo_drive
-      if (!cs_sync_2) begin
-        cipo_internal <= cipo_drive;
-      end else begin
-        cipo_internal <= 1'b0;  // Default to 0 when CS is inactive
+  //===================================================
+  // Edge Detection
+  //===================================================
+  wire sclk_rising = (CPOL == 0) ? (sclk_sync_1 && !sclk_sync_2) : (!sclk_sync_1 && sclk_sync_2);
+  wire sclk_falling = (CPOL == 0) ? (!sclk_sync_1 && sclk_sync_2) : (sclk_sync_1 && !sclk_sync_2);
+  wire shift_edge = (CPHA == 0) ? sclk_rising : sclk_falling;
+  wire sample_edge = (CPHA == 0) ? sclk_falling : sclk_rising;
+
+  //===================================================
+  // FSM Register + Timeout Counter
+  //===================================================
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      spi_state       <= SPI_IDLE;
+      spi_timeout_cnt <= 32'd0;
+    end else begin
+      spi_state <= spi_next_state;
+      // count only in RX phases
+      if (spi_state == SPI_RX || spi_state == SPI_IMG_RX) spi_timeout_cnt <= spi_timeout_cnt + 1;
+      else spi_timeout_cnt <= 32'd0;
+    end
+  end
+
+  //===================================================
+  // FSM Next-State and Control Logic
+  //===================================================
+  always_comb begin
+    spi_next_state = spi_state;
+    // timeout forces idle
+    if (spi_timeout_cnt >= SPI_TIMEOUT_LIMIT) spi_next_state = SPI_IDLE;
+
+    shift_rx = 1'b0;
+
+    case (spi_state)
+      SPI_IDLE: begin
+        if (rx_mode) begin
+          spi_next_state = SPI_RX;
+        end
+      end
+
+      SPI_RX: begin
+        if (sample_edge) begin
+          shift_rx = 1'b1;
+          if (bit_cnt == 4'd7) begin
+            spi_next_state = SPI_PROCESS;
+          end
+        end
+      end
+
+      SPI_PROCESS: begin
+        if (img_byte_cnt < IMG_BYTE_COUNT) begin
+          spi_next_state = SPI_IMG_RX;
+        end else begin
+          spi_next_state = SPI_DONE;
+        end
+      end
+
+      SPI_IMG_RX: begin
+        spi_next_state = SPI_RX;
+      end
+
+      SPI_DONE: begin
+        if (cs_sync_2) begin
+          spi_next_state = SPI_WAIT;  // hold data one extra cycle
+        end
+      end
+
+      SPI_WAIT: begin
+        spi_next_state = SPI_IDLE;  // now allow transition
+      end
+
+      default: spi_next_state = SPI_IDLE;
+    endcase
+  end
+
+  //===================================================
+  // Shift Registers and Flags
+  //===================================================
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rx_shift_reg   <= '0;
+      bit_cnt        <= '0;
+      spi_rx_data    <= '0;
+      byte_valid_int <= 1'b0;
+      img_byte_cnt   <= '0;
+    end else begin
+      if (spi_state == SPI_RX && spi_next_state != SPI_RX) byte_valid_int <= 1'b0;
+
+      if (shift_rx) begin
+        rx_shift_reg <= {rx_shift_reg[6:0], copi_sync_2};
+        bit_cnt <= bit_cnt + 1;
+      end
+
+      if (spi_state == SPI_PROCESS) begin
+        img_buffer[img_byte_cnt] <= rx_shift_reg;
+        img_byte_cnt <= img_byte_cnt + 1;
+
+        $display("[SPI RX] (%0d): Byte Processed. Data = %b, Byte Count = %0d", cycle_cnt,
+                 rx_shift_reg, img_byte_cnt);
+
+        spi_rx_data    <= rx_shift_reg;
+        byte_valid_int <= 1'b1;
+        bit_cnt <= 0;
+      end else byte_valid_int <= 1'b0;
+
+      // Clear once acknowledged
+      if (byte_valid_int && byte_taken) begin
+        byte_valid_int <= 1'b0;
+        spi_rx_data    <= '0;
+      end
+
+      if (spi_state == SPI_WAIT) begin
+        img_byte_cnt <= '0;
       end
     end
   end
 
-  assign sclk_rising = (CPOL == 0) ? (sclk_sync_1 && !sclk_sync_2) : (!sclk_sync_1 && sclk_sync_2);
-  assign sclk_falling = (CPOL == 0) ? (!sclk_sync_1 && sclk_sync_2) : (sclk_sync_1 && !sclk_sync_2);
 
-  // ------------------------ Phase Control Logic ------------------------
-  assign shift_edge = (CPHA == 0) ? sclk_rising : sclk_falling;
-  assign sample_edge = (CPHA == 0) ? sclk_falling : sclk_rising;
+  //===================================================
+  // Output Assignments
+  //===================================================
+  assign spi_byte_valid = byte_valid_int;
+
+`ifndef SYNTHESIS
+  logic [31:0] cycle_cnt;
+  spi_state_t prev_spi_state;
+  logic prev_cs_sync_2, prev_rx_mode;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      cycle_cnt <= 0;
+      prev_spi_state <= SPI_IDLE;
+      prev_cs_sync_2 <= 1'b1;
+      prev_rx_mode <= 1'b0;
+    end else begin
+      cycle_cnt <= cycle_cnt + 1;
+
+      // Debug FSM state transitions
+      if (spi_state != prev_spi_state) begin
+        $display("[SPI RX] (%0d): State Transition: %s -> %s", cycle_cnt, prev_spi_state.name(),
+                 spi_state.name());
+        prev_spi_state <= spi_state;
+      end
+
+      // Debug CS_N and RX Mode changes
+      if (cs_sync_2 != prev_cs_sync_2 || rx_mode != prev_rx_mode) begin
+        $display("[SPI RX] (%0d): SPI Active. CS_N = %b -> %b, RX Mode = %b -> %b", cycle_cnt,
+                 prev_cs_sync_2, cs_sync_2, prev_rx_mode, rx_mode);
+        prev_cs_sync_2 <= cs_sync_2;
+        prev_rx_mode   <= rx_mode;
+      end
+
+      // Comment out verbose bit-level debug
+      // if (shift_rx)
+      //   $display(
+      //       "[SPI RX] (%0d): Shift Edge Detected. COPI = %b, Shift Register = %b, Bit Count = %0d",
+      //       cycle_cnt,
+      //       copi_sync_2,
+      //       rx_shift_reg,
+      //       bit_cnt
+      //   );
+
+      // Debug when a byte is processed
+      if (spi_state == SPI_PROCESS)
+        $display(
+            "[SPI RX] (%0d): Byte Processed. Data = %b, Byte Count = %0d",
+            cycle_cnt,
+            rx_shift_reg,
+            img_byte_cnt
+        );
+
+      // Debug when the SPI is done
+      if (spi_state == SPI_DONE)
+        $display("[SPI RX] (%0d): SPI Done. Image Byte Count = %0d", cycle_cnt, img_byte_cnt);
+    end
+  end
+`endif
 
 endmodule

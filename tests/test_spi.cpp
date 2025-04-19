@@ -6,5 +6,5 @@
 void test_spi(Vtop *dut)
 {
     std::cout << "\n[TEST] test_spi...\n";
-    int timestamp = 0;
+    tick(dut, 5);
 }

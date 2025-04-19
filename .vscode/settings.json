@@ -50,10 +50,23 @@
     "stdexcept": "cpp",
     "streambuf": "cpp",
     "typeinfo": "cpp",
-    "set": "cpp"
+    "set": "cpp",
+    "ctime": "cpp",
+    "iomanip": "cpp",
+    "sstream": "cpp",
+    "charconv": "cpp",
+    "format": "cpp",
+    "span": "cpp",
+    "variant": "cpp"
   },
   // Language-specific (example: only for Python)
   "[systemverilog]": {
     "editor.defaultFormatter": "bmpenuelas.systemverilog-formatter-vscode"
+  },
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": true,
+    "markdown": false,
+    "scminput": false
   }
 }

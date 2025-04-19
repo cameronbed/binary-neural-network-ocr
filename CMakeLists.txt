@@ -27,6 +27,7 @@ set(TESTBENCH_CPP
     ${CMAKE_SOURCE_DIR}/tests/test_helpers.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_image_buffer.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_spi.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_fsm.cpp
 )
 set(OBJ_DIR ${CMAKE_BINARY_DIR}/obj_dir)
 set(EXECUTABLE ${CMAKE_BINARY_DIR}/${TEST_NAME})

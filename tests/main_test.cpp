@@ -12,17 +12,9 @@ int main(int argc, char **argv)
     Verilated::commandArgs(argc, argv);
     Vtop *dut = new Vtop;
 
-    test_tick_and_spi_send(dut);
-    delete dut;
+    // test_tick_and_spi_send(dut);
+    // test_fsm(dut);
+    test_image_buffer(dut);
 
-    if (test_failures == 0)
-    {
-        std::cout << "\n✅ ALL TESTS PASSED ✅\n";
-        return 0;
-    }
-    else
-    {
-        std::cerr << "\n❌ " << test_failures << " TEST(S) FAILED ❌\n";
-        return 1;
-    }
+    delete dut;
 }

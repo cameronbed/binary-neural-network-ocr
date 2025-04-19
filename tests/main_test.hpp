@@ -10,12 +10,11 @@ extern int test_failures;
 
 // Tests
 void test_spi(Vtop *dut);
+void test_fsm(Vtop *dut);
+void test_image_buffer(Vtop *dut);
 
 // Helpers
-void tick(Vtop *dut, VerilatedVcdC *tfp, int *timestamp, int n);
-void tick(Vtop *dut, int n);
-void spi_send_byte(Vtop *dut, uint8_t byte, int mode, VerilatedVcdC *tfp, int *timestamp, bool verbose = false);
+void tick(Vtop *dut, int cycles);
+void spi_send_byte(Vtop *dut, uint8_t byte, int mode, bool verbose, bool keep_cs);
+void do_reset(Vtop *dut, int cycles, bool verbose);
 void debug(Vtop *dut);
-
-// Helpers Tests
-void test_tick_and_spi_send(Vtop *dut);
