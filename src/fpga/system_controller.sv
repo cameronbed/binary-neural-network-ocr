@@ -43,6 +43,7 @@ module system_controller (
 
   // ------------------- BNN Interface
   logic         bnn_start;
+  //logic [  3:0] result_out;
 
   // ----------------------- FSM Controller Instantiation -----------------------
   controller_fsm u_controller_fsm (

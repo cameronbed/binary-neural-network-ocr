@@ -64,7 +64,7 @@
     "editor.defaultFormatter": "bmpenuelas.systemverilog-formatter-vscode"
   },
   "github.copilot.enable": {
-    "*": true,
+    "*": false,
     "plaintext": true,
     "markdown": false,
     "scminput": false
