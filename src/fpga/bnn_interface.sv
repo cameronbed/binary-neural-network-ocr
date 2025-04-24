@@ -14,10 +14,19 @@ module bnn_interface (
     input  logic bnn_start
 );
 
+  // ----------------- Internal Signals -----------------
+  parameter int CONV1_IMG_IN_SIZE = 30;  // Match the parameter in bnn_top
+  parameter int CONV1_IC = 1;  // Match the parameter in bnn_top
+
+  logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in_truncated[0:CONV1_IC-1];
+
+  // Truncate the last 4 bits and reshape img_in
+  assign img_in_truncated[0] = img_in[903:4]; // Truncate last 4 bits and assign to the first channel
+
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
       .clk(clk),
-      .img_in(img_in),
+      .img_in(img_in_truncated),
       .data_in_ready(data_out_ready_int),
       .result(result_out),
       .data_out_ready(result_ready_int)
@@ -60,24 +69,22 @@ module bnn_interface (
       // result_out <= 4'd0;
       result_ready <= 1'b0;
       state <= IDLE;
-      done_counter = 0;  // Initialize counter
     end else begin
       state <= next_state;  // Only update state here
       case (state)
         IDLE: begin
-          done_counter <= 0;  // Reset counter in IDLE
         end
 
         INFERENCE: begin
-          // result_out   <= 4'd1;
-          // result_ready <= 1'b1;
+          if (result_ready_int == 1) begin
+            result_ready <= 1'd1;
+          end
         end
 
         DONE: begin
-          if ({25'b0, done_counter} < DONE_CYCLES - 1) begin
-            done_counter <= done_counter + 1;  // Increment counter
-          end
+
         end
+
 
         default: ;
       endcase

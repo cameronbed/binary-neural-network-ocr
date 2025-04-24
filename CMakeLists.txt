@@ -20,11 +20,11 @@ set(RTL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/fpga/image_buffer.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/bnn_top.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/Comparator.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/Conv2d.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/ConvCore.sv
+    # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/Conv2d.sv
+    # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/ConvCore.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/FC.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/MaxPool2d.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/MaxPoolCore.sv
+    # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/MaxPool2d.sv
+    # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/MaxPoolCore.sv
 )
 
 # Set up paths

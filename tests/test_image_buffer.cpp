@@ -52,11 +52,11 @@ void test_image_buffer(Vtop *dut)
     spi_send_byte(dut, IMG_CMD, 0, true, true);
     tick(dut, 4);
 
-    // Debug output to check FSM state and send_image signal
+    // Debug output to check FSM state and send_image_pin signal
     debug(dut);
     tick(dut, 2);
 
-    assert(dut->send_image == 1 && "[TEST] send_image should be asserted after IMG_CMD");
+    assert(dut->send_image_pin == 1 && "[TEST] send_image_pin should be asserted after IMG_CMD");
 
     // Send all rows of digit_0
     int total_bytes_sent = 0;

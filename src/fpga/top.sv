@@ -2,8 +2,8 @@
 // `include "system_controller.sv"
 module top (
     input logic clk,
-    input logic rst_n1,
-    input logic rst_n2,
+    input logic rst_n_pin,
+    input logic rst_n_btn,
     // SPI
     input logic SCLK,
     input logic COPI,
@@ -29,7 +29,7 @@ module top (
   logic send_image_int;
   logic status_ready_int;
 
-  assign rst_n = (rst_n1 || rst_n2);
+  assign rst_n = rst_n_pin && rst_n_btn;
 
   assign result_ready_pin = result_ready_int;
   assign result_ready_led = result_ready_int;
@@ -58,7 +58,9 @@ module top (
       .status_ready(status_ready_int),
 
       // DEBUG
+`ifndef SYNTHESIS
       .debug_trigger(debug_trigger)
+`endif
   );
 
 endmodule

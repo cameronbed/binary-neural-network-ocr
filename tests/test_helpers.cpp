@@ -110,10 +110,10 @@ void do_reset(Vtop *dut, int cycles, bool verbose = false)
     if (!dut)
         return;
 
-    dut->rst_n = 0; // Assert reset
-    main_time = 0;  // Reset main_time
+    dut->rst_n_pin = 0; // Assert reset
+    main_time = 0;      // Reset main_time
     tick(dut, cycles);
-    dut->rst_n = 1; // Deassert reset
+    dut->rst_n_pin = 1; // Deassert reset
     tick(dut, cycles);
     tick(dut, 1); // extra settle cycle
 

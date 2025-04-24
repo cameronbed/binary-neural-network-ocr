@@ -2,7 +2,7 @@
 `include "MaxPool2d.sv"
 
 module bnn_top (
-    // input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in [0:CONV1_IC-1]
+    input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in[0:CONV1_IC-1],
     input logic clk,
     input logic data_in_ready,
     output logic [OUTPUT_BIT-1:0] result,
