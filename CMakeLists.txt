@@ -18,7 +18,7 @@ set(RTL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/fpga/fsm_controller.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/top.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/image_buffer.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/BNN_top.sv
+    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/bnn_top.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/Comparator.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/Conv2d.sv
     ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/ConvCore.sv
@@ -50,7 +50,8 @@ add_custom_command(
         --trace
         --timing
         --top-module top
-        -I${CMAKE_SOURCE_DIR}/src/fpga  # Add include path
+        -I${CMAKE_SOURCE_DIR}/src/fpga
+        -I${CMAKE_SOURCE_DIR}/src/fpga/bnn_module
         --Mdir ${OBJ_DIR}
         -CFLAGS "-I${CMAKE_SOURCE_DIR}/include"
         -o ${EXECUTABLE}

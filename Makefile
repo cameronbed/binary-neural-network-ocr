@@ -1,9 +1,6 @@
 # Vivado Paths
-VIVADO := /mnt/c/Xilinx/Vivado/2024.2/bin/vivado.bat
-
-WIN_PWD := $(shell wslpath -w $(shell pwd))
-
-VIVADO_BATCH := cmd.exe /c $(WIN_PWD)\$(notdir $(VIVADO))
+VIVADO := "C:/Xilinx/Vivado/2024.2/bin/vivado.bat"
+VIVADO_BIN := "C:/Xilinx/Vivado/2024.2/bin"
 
 # Verbose build option
 VERBOSE=1
@@ -26,12 +23,11 @@ clean:
 # ============== Vivado Targets ==============
 
 # Synthesis and simulation targets
-.PHONY: bitstream flash
 bitstream:
 	@echo "==> Synthesizing and generating bitstream..."
-	@cd $(WIN_PWD) && cmd.exe /c $(VIVADO) -mode batch -source scripts/run_vivado.tcl
+	$(VIVADO) -mode batch -source scripts/run_vivado.tcl
 	
 # Program the Basys3 board
-flash: bitstream
+flash:
 	@echo "==> Programming Basys3 board..."
-	@cd $(WIN_PWD) && cmd.exe /c $(VIVADO) -mode batch -source scripts/flash_vivado.tcl
+	$(VIVADO) -mode batch -source scripts/flash_vivado.tcl

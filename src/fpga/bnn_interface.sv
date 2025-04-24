@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-// `include "bnn_module/BNN_top.sv"
+// `include "bnn_module/bnn_top.sv"
 module bnn_interface (
     input logic clk,
     input logic rst_n,
@@ -15,11 +15,13 @@ module bnn_interface (
 );
 
   // ----------------- BNN Module Instantiation -----------------
-  BNN_top u_bnn_top (
-      .img_in({img_in[899:0]}),
-      .result(result_out)
+  bnn_top u_bnn_top (
+      .clk(clk),
+      .img_in(img_in),
+      .data_in_ready(data_out_ready_int),
+      .result(result_out),
+      .data_out_ready(result_ready_int)
   );
-
 
   typedef enum logic [1:0] {
     IDLE,
@@ -29,8 +31,8 @@ module bnn_interface (
 
   bnn_state_t state, next_state;
 
-  parameter int DONE_CYCLES = 1024;
-  logic [9:0] done_counter;
+  logic data_out_ready_int;
+  logic result_ready_int;
 
   // ----------------------- FSM Next-State Logic ----------------------
   always_comb begin
@@ -41,12 +43,11 @@ module bnn_interface (
       end
 
       INFERENCE: begin
-        // if (done_counter >= DONE_CYCLES) next_state = DONE;
-        // done_counter <= done_counter + 1'b1;
+        if (result_ready_int == 1) next_state = DONE;
       end
 
       DONE: begin
-        if ({25'b0, done_counter} == DONE_CYCLES - 1) next_state = IDLE;
+
       end
 
       default: next_state = IDLE;
