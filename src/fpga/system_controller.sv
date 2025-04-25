@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
-// `include "spi_peripheral.sv"
-// `include "bnn_interface.sv"
-// `include "debug_module.sv"
-// `include "fsm_controller.sv"
-// `include "image_buffer.sv"
+`include "spi_peripheral.sv"
+`include "bnn_interface.sv"
+`include "debug_module.sv"
+`include "fsm_controller.sv"
+`include "image_buffer.sv"
 module system_controller (
     input logic clk,
     input logic rst_n,
@@ -19,9 +19,28 @@ module system_controller (
     output logic send_image,
     output logic status_ready,
 
+    output logic heartbeat,
+
     // DEBUG
+
     input logic debug_trigger
 );
+
+  // logic rst_n;
+  //   logic result_ready_int;
+  //   logic send_image_int;
+  //   logic status_ready_int;
+
+  //   assign rst_n = rst_n_pin && rst_n_btn;
+
+  //   assign result_ready_pin = result_ready_int;
+  //   assign result_ready_led = result_ready_int;
+
+  //   assign send_image_led = send_image_int;
+  //   assign send_image_pin = send_image_int;
+
+  //   assign status_ready_led = status_ready_int;
+  //   assign status_ready_pin = status_ready_int;
 
   // ------------------------ FSM Controller ---------------
 
@@ -29,6 +48,7 @@ module system_controller (
   logic infer_start;  // Added inference start signal
   logic buffer_full, buffer_empty, clear_buffer;  // Declare missing signals
   logic [  2:0] fsm_state;  // Match FSM state width
+
 
   // ------------------------ SPI Peripheral ---------------
   // SPI Data
@@ -47,8 +67,9 @@ module system_controller (
 
   // ----------------------- FSM Controller Instantiation -----------------------
   controller_fsm u_controller_fsm (
-      .clk  (clk),
+      .clk(clk),
       .rst_n(rst_n),
+      .heartbeat(heartbeat),
 
       // SPI
       .spi_cs_n(spi_cs_n),
@@ -121,7 +142,6 @@ module system_controller (
       .img_out     (image_flat)            // Packed vector matches declaration
   );
 
-`ifndef SYNTHESIS
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
       .clk         (clk),
@@ -147,6 +167,5 @@ module system_controller (
       .bnn_result_ready(result_ready),
       .bnn_result_out  (result_out)
   );
-`endif
 
 endmodule

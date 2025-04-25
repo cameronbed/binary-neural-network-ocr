@@ -22,12 +22,17 @@ module debug_module (
     // BNN
     input logic       bnn_result_ready,
     input logic [3:0] bnn_result_out
+
+    // Top Level
+
 );
 
   // Registers to track previous values for change detection
   logic [2:0] prev_fsm_state;
   logic [9:0] prev_write_addr;
   logic prev_buffer_full, prev_buffer_empty;
+  logic        prev_spi_byte_valid;  // Previous state tracking
+
   logic [31:0] cycle_cnt;
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -42,8 +47,19 @@ module debug_module (
     if (debug_enable) begin
       // Print FSM state only if it changes
       if (fsm_state != prev_fsm_state) begin
-        $display("[DEBUG Module]:  On Cycle %0d. FSM state changed: %0d", cycle_cnt, fsm_state);
+        $display("[DEBUG %0d] FSM state changed: %s -> %s", cycle_cnt, prev_fsm_state, fsm_state);
         prev_fsm_state <= fsm_state;
+      end
+
+      // Print SPI byte valid only if it changes
+      if (spi_byte_valid != prev_spi_byte_valid) begin
+        $display("[DEBUG %0d] SPI spi_byte_valid changed: %b -> %b", cycle_cnt,
+                 prev_spi_byte_valid, spi_byte_valid);
+        prev_spi_byte_valid <= spi_byte_valid;
+      end
+      // Print SPI rx byte if valid goes high
+      if (spi_byte_valid && !prev_spi_byte_valid) begin
+        $display("[DEBUG %0d] SPI spi_rx_byte received: 0x%02X", cycle_cnt, spi_rx_byte);
       end
 
       // Print buffer status only if it changes
@@ -56,7 +72,8 @@ module debug_module (
 
       // Print write address only if it changes
       if (write_addr != prev_write_addr) begin
-        $display("[DEBUG Module]:  On Cycle %0d, Write Addr: %0d", cycle_cnt, write_addr);
+        $display("[DEBUG %0d] Buffer Write Addr changed: %0d -> %0d", cycle_cnt, prev_write_addr,
+                 write_addr);
         prev_write_addr <= write_addr;
       end
 
@@ -82,3 +99,4 @@ module debug_module (
   end
 
 endmodule
+

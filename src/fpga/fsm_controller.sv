@@ -1,8 +1,9 @@
 `timescale 1ns / 1ps
 
 module controller_fsm (
-    input logic clk,
-    input logic rst_n,
+    input  logic clk,
+    input  logic rst_n,
+    output logic heartbeat,
 
     // SPI interface
     input  logic       spi_cs_n,
@@ -22,10 +23,9 @@ module controller_fsm (
     output logic buffer_write_enable,
 
     // BNN interface
-    input logic result_ready,
-    input logic [3:0] result_out,
-    output logic bnn_start,
-
+    input  logic       result_ready,
+    input  logic [3:0] result_out,
+    output logic       bnn_start,
     output logic [2:0] fsm_state
 );
 
@@ -99,8 +99,10 @@ module controller_fsm (
     end else if (ctrl_state == S_CMD_DISPATCH && img_tx_request_reg) begin
       send_image_reg <= 1;
     end else if (next_state == S_IDLE) begin
-      send_image_reg <= 0;
+      send_image_reg <= 0;  // Clear send_image when transitioning to S_IDLE
     end
+
+    heartbeat = ~heartbeat;
   end
 
   //===================================================
@@ -203,13 +205,11 @@ module controller_fsm (
       S_STATUS_READY: next_state = S_IDLE;
 
       S_IMG_RX: begin
-        if (bytes_received == IMG_BYTE_SIZE) begin
-          next_state = S_WAIT_INFERENCE;  // Transition only after receiving all bytes
-        end else if (rx_timeout_cnt >= TIMEOUT_LIMIT) begin
-          next_state = S_IDLE;  // Handle timeout
-        end else begin
-          next_state = S_IMG_RX;  // Stay in S_IMG_RX until all bytes are received
-        end
+        if (bytes_received == IMG_BYTE_SIZE) next_state = S_WAIT_INFERENCE;
+        else if (rx_timeout_cnt >= TIMEOUT_LIMIT) next_state = S_IDLE;
+        else if (cs_rising)  // abort image RX on CS deassert
+          next_state = S_IDLE;
+        else next_state = S_IMG_RX;
       end
 
       S_WAIT_INFERENCE: if (result_ready_sync2) next_state = S_CLEAR;
@@ -289,7 +289,6 @@ module controller_fsm (
   //===================================================
   // Optional Debug
   //===================================================
-`ifndef SYNTHESIS
   logic prev_result_ready_sync2;
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -354,6 +353,5 @@ module controller_fsm (
                result_ready_sync2);
     end
   end
-`endif
 
 endmodule

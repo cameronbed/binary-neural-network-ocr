@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-// `include "bnn_module/bnn_top.sv"
+`include "bnn_module/bnn_top.sv"
 module bnn_interface (
     input logic clk,
     input logic rst_n,
@@ -13,6 +13,9 @@ module bnn_interface (
     output logic result_ready,
     input  logic bnn_start
 );
+
+  logic data_out_ready_int;
+  logic result_ready_int;
 
   // ----------------- Internal Signals -----------------
   parameter int CONV1_IMG_IN_SIZE = 30;  // Match the parameter in bnn_top
@@ -40,8 +43,7 @@ module bnn_interface (
 
   bnn_state_t state, next_state;
 
-  logic data_out_ready_int;
-  logic result_ready_int;
+
 
   // ----------------------- FSM Next-State Logic ----------------------
   always_comb begin
@@ -82,7 +84,7 @@ module bnn_interface (
         end
 
         DONE: begin
-
+          result_ready <= 1'b0;
         end
 
 

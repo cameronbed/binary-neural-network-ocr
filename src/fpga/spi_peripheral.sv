@@ -206,7 +206,6 @@ module spi_peripheral #(
   //===================================================
   assign spi_byte_valid = byte_valid_int;
 
-`ifndef SYNTHESIS
   logic [31:0] cycle_cnt;
   spi_state_t prev_spi_state;
   logic prev_cs_sync_2, prev_rx_mode;
@@ -259,6 +258,5 @@ module spi_peripheral #(
         $display("[SPI RX] (%0d): SPI Done. Image Byte Count = %0d", cycle_cnt, img_byte_cnt);
     end
   end
-`endif
 
 endmodule

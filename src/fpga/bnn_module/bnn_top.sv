@@ -1,24 +1,27 @@
 `include "Conv2d.sv"
 `include "MaxPool2d.sv"
+`include "FC.sv"
+`include "Comparator.sv"
 
-module bnn_top (
+module bnn_top #(
+    parameter int CONV1_IMG_IN_SIZE = 30,
+    parameter int CONV1_IMG_OUT_SIZE = CONV1_IMG_IN_SIZE - 2,
+    parameter int POOL1_IMG_OUT_SIZE = CONV1_IMG_OUT_SIZE / 2,
+    parameter int CONV2_IMG_OUT_SIZE = POOL1_IMG_OUT_SIZE - 2,
+    parameter int POOL2_IMG_OUT_SIZE = CONV2_IMG_OUT_SIZE / 2,
+    parameter int CONV1_IC = 1,
+    parameter int CONV1_OC = 10,
+    parameter int CONV2_OC = 8,
+    parameter int FC_OC = 10,  // num classes
+    parameter int FC_IC = POOL2_IMG_OUT_SIZE * POOL2_IMG_OUT_SIZE * CONV2_OC,
+    parameter int OUTPUT_BIT = $clog2(FC_OC + 1)  // num of bits to enumerate each class
+) (
     input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in[0:CONV1_IC-1],
     input logic clk,
     input logic data_in_ready,
     output logic [OUTPUT_BIT-1:0] result,
     output logic data_out_ready
 );
-  parameter int CONV1_IC = 1;
-  parameter int CONV1_OC = 10;
-  parameter int CONV2_OC = 8;
-  parameter int FC_IC = POOL2_IMG_OUT_SIZE * POOL2_IMG_OUT_SIZE * CONV2_OC;
-  parameter int FC_OC = 10;  // num classes
-  parameter int CONV1_IMG_IN_SIZE = 30;
-  parameter int CONV1_IMG_OUT_SIZE = CONV1_IMG_IN_SIZE - 2;
-  parameter int POOL1_IMG_OUT_SIZE = CONV1_IMG_OUT_SIZE / 2;
-  parameter int CONV2_IMG_OUT_SIZE = POOL1_IMG_OUT_SIZE - 2;
-  parameter int POOL2_IMG_OUT_SIZE = CONV2_IMG_OUT_SIZE / 2;
-  parameter int OUTPUT_BIT = $clog2(FC_OC + 1);  // num of bits to enumerate each class
 
   logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in[0:CONV1_IC-1] = {
     900'h7c000003fc00001e70000070000001800000070000001ff000001fe0000001800000060000081800003ff00000ffc0000000000000000000000000000000000000000000000000000000000000000000000
@@ -3000,7 +3003,7 @@ module bnn_top (
   );
 
   Comparator #(
-      .IC(FC_OC),
+      .IC(FC_OC)
   ) compare (
       .clk(clk),
       .data_in_ready(fc_data_ready),

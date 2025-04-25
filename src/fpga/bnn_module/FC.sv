@@ -6,6 +6,7 @@
 
     this layer is intended to use as the last layer for image classification
 */
+`timescale 1ns / 1ps
 module FC #(
     parameter int IC = 288,
     parameter int OC = 10

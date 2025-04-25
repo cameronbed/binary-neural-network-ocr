@@ -1,7 +1,7 @@
 # scripts/simulate.tcl
 
 # Read design and testbench
-read_verilog src/fpga/top.v
+read_verilog src/fpga/top.sv
 # read_verilog tests/blinky_tb.v
 
 # Set top module

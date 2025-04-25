@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-// `include "system_controller.sv"
+`include "system_controller.sv"
 module top (
     input logic clk,
     input logic rst_n_pin,
@@ -18,10 +18,10 @@ module top (
     output logic result_ready_led,
     output logic send_image_led,
     output logic status_ready_led,
+
+    output logic heartbeat,
     // DEBUG
-`ifndef SYNTHESIS
     input  logic debug_trigger
-`endif
 );
 
   logic rst_n;
@@ -29,7 +29,7 @@ module top (
   logic send_image_int;
   logic status_ready_int;
 
-  assign rst_n = rst_n_pin && rst_n_btn;
+  assign rst_n = rst_n_pin || rst_n_btn;  // Either can reset the system (active-low reset)
 
   assign result_ready_pin = result_ready_int;
   assign result_ready_led = result_ready_int;
@@ -41,8 +41,9 @@ module top (
   assign status_ready_pin = status_ready_int;
 
   system_controller u_system_controller (
-      .clk  (clk),
+      .clk(clk),
       .rst_n(rst_n),
+      .heartbeat(heartbeat),
 
       // SPI
       .SCLK(SCLK),
@@ -57,10 +58,8 @@ module top (
       .send_image  (send_image_int),
       .status_ready(status_ready_int),
 
-      // DEBUG
-`ifndef SYNTHESIS
+      //--------------------- DEBUG
       .debug_trigger(debug_trigger)
-`endif
   );
 
 endmodule

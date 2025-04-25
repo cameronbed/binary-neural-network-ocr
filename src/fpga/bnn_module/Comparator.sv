@@ -3,6 +3,7 @@
     compares the outputs from the FC layer to decide the final classification output
     the inputs should be in the form of Q8.8 fixed-point array
 */
+`timescale 1ns / 1ps
 
 module Comparator #(
     parameter int IC = 10,
