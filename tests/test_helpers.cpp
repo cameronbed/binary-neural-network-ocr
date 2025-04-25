@@ -12,7 +12,7 @@
 
 constexpr int HALF_PERIOD_NS = 5;
 
-inline void tick(Vtop *dut, int cycles = 1)
+inline void tick(Vsystem_controller *dut, int cycles = 1)
 {
     static_assert(std::is_same_v<vluint64_t, decltype(main_time)>,
                   "main_time must be vluint64_t");
@@ -31,7 +31,7 @@ inline void tick(Vtop *dut, int cycles = 1)
     }
 }
 
-void spi_send_byte(Vtop *dut, uint8_t byte, int mode, bool verbose, bool keep_cs = false)
+void spi_send_byte(Vsystem_controller *dut, uint8_t byte, int mode, bool verbose, bool keep_cs = false)
 {
 
     if (!dut)
@@ -105,7 +105,7 @@ void spi_send_byte(Vtop *dut, uint8_t byte, int mode, bool verbose, bool keep_cs
     }
 }
 
-void do_reset(Vtop *dut, int cycles, bool verbose = false)
+void do_reset(Vsystem_controller *dut, int cycles, bool verbose = false)
 {
     if (!dut)
         return;
@@ -124,7 +124,7 @@ void do_reset(Vtop *dut, int cycles, bool verbose = false)
     }
 }
 
-void debug(Vtop *dut)
+void debug(Vsystem_controller *dut)
 {
     if (!dut)
         return;

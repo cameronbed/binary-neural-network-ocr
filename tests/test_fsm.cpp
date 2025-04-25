@@ -7,7 +7,7 @@
 #include <stdexcept> // For std::invalid_argument
 #include <iomanip>   // Added for std::setw and std::setfill
 
-void test_fsm(Vtop *dut)
+void test_fsm(Vsystem_controller *dut)
 {
     std::cout << "[Test FSM] Running FSM test..." << std::endl;
     assert(dut && "DUT must not be null");
@@ -26,7 +26,7 @@ void test_fsm(Vtop *dut)
     spi_send_byte(dut, STATUS_CMD, 0, true, true);
     tick(dut, 3);
     dut->spi_cs_n = 1;
-    tick(dut, 5);
+    tick(dut, 3);
     std::cout << "[DEBUG] status_ready_pin = " << int(dut->status_ready_pin) << "\n";
     assert(dut->status_ready_pin == 1 && "[TEST FSM] Expected status_ready_pin = 1");
 

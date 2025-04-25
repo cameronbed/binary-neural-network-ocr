@@ -1,3 +1,5 @@
+`ifndef SYNTHESIS
+
 `timescale 1ns / 1ps
 module debug_module (
     input logic clk,
@@ -63,12 +65,12 @@ module debug_module (
       end
 
       // Print buffer status only if it changes
-      // if (buffer_full != prev_buffer_full || buffer_empty != prev_buffer_empty) begin
-      //   $display("[DEBUG Module]:  On Cycle %0d, Buffer status: full=%0b, empty=%0b", cycle_cnt,
-      //            buffer_full, buffer_empty);
-      //   prev_buffer_full  <= buffer_full;
-      //   prev_buffer_empty <= buffer_empty;
-      // end
+      if (buffer_full != prev_buffer_full || buffer_empty != prev_buffer_empty) begin
+        $display("[DEBUG %0d] Buffer status changed: full %b->%b, empty %b->%b", cycle_cnt,
+                 prev_buffer_full, buffer_full, prev_buffer_empty, buffer_empty);
+        prev_buffer_full  <= buffer_full;
+        prev_buffer_empty <= buffer_empty;
+      end
 
       // Print write address only if it changes
       if (write_addr != prev_write_addr) begin
@@ -100,3 +102,4 @@ module debug_module (
 
 endmodule
 
+`endif

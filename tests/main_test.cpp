@@ -10,7 +10,7 @@ int test_failures = 0;    // Initialize test_failures to 0
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
-    Vtop *dut = new Vtop;
+    Vsystem_controller *dut = new Vsystem_controller;
 
     // test_tick_and_spi_send(dut);
     // test_fsm(dut);

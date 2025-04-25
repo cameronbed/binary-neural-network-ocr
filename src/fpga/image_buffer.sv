@@ -19,10 +19,10 @@ module image_buffer (
 
   logic [TOTAL_BITS-1:0] img_buffer;
 
-  logic [31:0] write_ptr, next_ptr;  // Extend to 32 bits
-  assign next_ptr = write_ptr + ADDR_INC;  // No truncation
+  logic [31:0] write_ptr, next_ptr;
+  assign next_ptr = write_ptr + ADDR_INC;
 
-`ifdef VERILATOR
+`ifdef SYNTHESIS
   logic [31:0] cycle_cnt;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) cycle_cnt <= 32'd0;
@@ -45,7 +45,7 @@ module image_buffer (
         write_ptr <= next_ptr;  // Increment the write pointer
       end
 
-`ifdef VERILATOR
+`ifdef SYNTHESIS
       $display("[IMG Buffer] Cycle %0d: Wrote %b to addr %0d (write_ptr=%0d)", cycle_cnt, data_in,
                write_ptr, write_ptr);
       //      $display("[IMG Buffer Debug] Current img_buffer state: %b", img_buffer);
@@ -53,7 +53,7 @@ module image_buffer (
     end
   end
 
-`ifdef VERILATOR
+`ifdef SYNTHESIS
   always_ff @(posedge clk) begin
     if (write_enable) begin
       $display("[IMG Buffer Debug] Cycle %0d: Writing %b at write_ptr=%0d", cycle_cnt, data_in,
@@ -61,9 +61,7 @@ module image_buffer (
       //$display("[IMG Buffer Debug] Current img_buffer state: %b", img_buffer);
     end
   end
-`endif
 
-`ifdef VERILATOR
   // Catch pointer overflow in simulation
   always_ff @(posedge clk) begin
     assert (write_ptr < TOTAL_BITS + ADDR_INC)

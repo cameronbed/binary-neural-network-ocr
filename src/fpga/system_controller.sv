@@ -1,58 +1,65 @@
 `timescale 1ns / 1ps
-`include "spi_peripheral.sv"
-`include "bnn_interface.sv"
-`include "debug_module.sv"
-`include "fsm_controller.sv"
-`include "image_buffer.sv"
+`ifdef SYNTHESIS
+    `include "spi_peripheral.sv"
+    `include "bnn_interface.sv"
+    `include "debug_module.sv"
+    `include "fsm_controller.sv"
+    `include "image_buffer.sv"
+`endif
 module system_controller (
     input logic clk,
-    input logic rst_n,
+    input logic rst_n_pin,
+    input logic rst_n_btn,
 
     // SPI
     input logic SCLK,
     input logic COPI,
     input logic spi_cs_n,
-    output logic [3:0] result_out,  // Change from 8 bits to 4 bits
+    output logic [6:0] seg,
 
-    // Control
-    output logic result_ready,
-    output logic send_image,
-    output logic status_ready,
+    // Control Signals
+    output logic result_ready_pin,
+    output logic send_image_pin,
+    output logic status_ready_pin,
 
-    output logic heartbeat,
+    // FPGA Output
+    output logic result_ready_led,
+    output logic send_image_led,
+    output logic status_ready_led,
 
-    // DEBUG
+    output logic heartbeat
 
+`ifndef SYNTHESIS,
     input logic debug_trigger
+`endif
 );
+  //===================================================
+  // Internal Signals
+  //===================================================
+    logic rst_n;
+    logic result_ready;
+    logic send_image;
+    logic status_ready;
 
-  // logic rst_n;
-  //   logic result_ready_int;
-  //   logic send_image_int;
-  //   logic status_ready_int;
+    assign rst_n = rst_n_pin || rst_n_btn;
 
-  //   assign rst_n = rst_n_pin && rst_n_btn;
+    assign result_ready_pin = result_ready;
+    assign result_ready_led = result_ready;
 
-  //   assign result_ready_pin = result_ready_int;
-  //   assign result_ready_led = result_ready_int;
+    assign send_image_led = send_image;
+    assign send_image_pin = send_image;
 
-  //   assign send_image_led = send_image_int;
-  //   assign send_image_pin = send_image_int;
-
-  //   assign status_ready_led = status_ready_int;
-  //   assign status_ready_pin = status_ready_int;
+    assign status_ready_led = status_ready;
+    assign status_ready_pin = status_ready;
 
   // ------------------------ FSM Controller ---------------
-
-  logic rx_enable;  // Define rx_enable
-  logic infer_start;  // Added inference start signal
-  logic buffer_full, buffer_empty, clear_buffer;  // Declare missing signals
-  logic [  2:0] fsm_state;  // Match FSM state width
-
+  logic rx_enable;
+  logic infer_start;
+  logic buffer_full, buffer_empty, clear_buffer;
+  logic [3:0] fsm_state; 
 
   // ------------------------ SPI Peripheral ---------------
-  // SPI Data
-  logic [  7:0] spi_rx_data;  // Byte to be transmitted
+  logic [  7:0] spi_rx_data; 
   logic         spi_byte_valid;
   logic         byte_taken;
 
@@ -63,7 +70,39 @@ module system_controller (
 
   // ------------------- BNN Interface
   logic         bnn_start;
-  //logic [  3:0] result_out;
+  logic [3:0]  result_out_int;
+  logic [3:0] result_out_latched;
+
+  // ---------------------- Hearbeat
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) heartbeat <= 0;
+    else heartbeat <= ~heartbeat;
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        result_out_latched <= 4'b0000; // Reset to 0
+    end else if (result_ready) begin
+        result_out_latched <= result_out; // Latch the result
+    end
+  end
+
+// 7-segment decoder logic
+always_comb begin
+    case (result_out_latched)
+        4'b0000: seg = 7'b1000000; // Display 0
+        4'b0001: seg = 7'b1111001; // Display 1
+        4'b0010: seg = 7'b0100100; // Display 2
+        4'b0011: seg = 7'b0110000; // Display 3
+        4'b0100: seg = 7'b0011001; // Display 4
+        4'b0101: seg = 7'b0010010; // Display 5
+        4'b0110: seg = 7'b0000010; // Display 6
+        4'b0111: seg = 7'b1111000; // Display 7
+        4'b1000: seg = 7'b0000000; // Display 8
+        4'b1001: seg = 7'b0010000; // Display 9
+        default: seg = 7'b1111111; // Blank
+    endcase
+end
 
   // ----------------------- FSM Controller Instantiation -----------------------
   controller_fsm u_controller_fsm (
@@ -74,7 +113,7 @@ module system_controller (
       // SPI
       .spi_cs_n(spi_cs_n),
       .spi_byte_valid(spi_byte_valid),
-      .spi_rx_data(spi_rx_data),  // Byte received from SPI
+      .spi_rx_data(spi_rx_data), 
       .rx_enable(rx_enable),
       .byte_taken(byte_taken),
 
@@ -85,7 +124,7 @@ module system_controller (
       // Image Buffer
       .buffer_full(buffer_full),
       .buffer_empty(buffer_empty),
-      .clear_buffer(clear_buffer),  // Drive clear_buffer from FSM
+      .clear_buffer(clear_buffer),
       .buffer_write_enable(buffer_write_enable),
 
       // BNN Interface
@@ -100,20 +139,24 @@ module system_controller (
   spi_peripheral spi_peripheral_inst (
       .clk(clk),
       .rst_n(rst_n),
+
       // SPI Pins
       .SCLK(SCLK),
       .COPI(COPI),
       .spi_cs_n(spi_cs_n),
 
       // Data Interface
-      .spi_rx_data(spi_rx_data),  // Byte to send over SPI
+      .spi_rx_data(spi_rx_data), 
 
       // Control Signals
-      .rx_enable(rx_enable),  // Enable shift-in
-      .spi_byte_valid(spi_byte_valid),  // Peripheral has a new spi_rx_data
+      .rx_enable(rx_enable), 
+      .spi_byte_valid(spi_byte_valid),
       .byte_taken(byte_taken)
   );
 
+  //===================================================
+  // BNN Interface 
+  //===================================================
   bnn_interface u_bnn_interface (
       .clk  (clk),
       .rst_n(rst_n),
@@ -128,7 +171,7 @@ module system_controller (
       .bnn_start(bnn_start)
   );
 
-  // -------------- Image Buffer Instantiation --------------
+  // -------------- Image Buffer  --------------
   image_buffer u_image_buffer (
       .clk         (clk),
       .rst_n       (rst_n),
@@ -142,6 +185,7 @@ module system_controller (
       .img_out     (image_flat)            // Packed vector matches declaration
   );
 
+`ifndef SYNTHESIS
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
       .clk         (clk),
@@ -167,5 +211,6 @@ module system_controller (
       .bnn_result_ready(result_ready),
       .bnn_result_out  (result_out)
   );
+`endif
 
 endmodule

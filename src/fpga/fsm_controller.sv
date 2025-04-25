@@ -26,11 +26,11 @@ module controller_fsm (
     input  logic       result_ready,
     input  logic [3:0] result_out,
     output logic       bnn_start,
-    output logic [2:0] fsm_state
+    output logic [3:0] fsm_state
 );
 
-  // FSM states
-  typedef enum logic [2:0] {
+  // FSM states (now 4 bits)
+  typedef enum logic [3:0] {
     S_IDLE,
     S_RX_CMD,
     S_CMD_LATCH,
@@ -38,6 +38,7 @@ module controller_fsm (
     S_CMD_DISPATCH,
     S_STATUS_READY,
     S_WAIT_INFERENCE,
+    S_BNN_DONE,
     S_CLEAR
   } fsm_state_t;
 
@@ -56,7 +57,7 @@ module controller_fsm (
   logic [31:0] cycle_cnt;
   logic [31:0] rx_timeout_cnt;
   logic [ 9:0] bytes_received;
-  logic [ 9:0] debug_bytes_received;  // Explicitly declare debug_bytes_received
+  logic [ 9:0] debug_bytes_received;
 
   // Async synchronizers
   logic cs_sync1, cs_sync2;
@@ -70,7 +71,7 @@ module controller_fsm (
   // Command latch
   logic status_request_reg;
   logic img_tx_request_reg;
-  logic prev_status_request_reg, prev_img_tx_request_reg;  // Track previous values
+  logic prev_status_request_reg, prev_img_tx_request_reg;
 
   // Edge detection
   wire cs_falling = ~cs_sync1 && cs_sync2;
@@ -99,18 +100,19 @@ module controller_fsm (
     end else if (ctrl_state == S_CMD_DISPATCH && img_tx_request_reg) begin
       send_image_reg <= 1;
     end else if (next_state == S_IDLE) begin
-      send_image_reg <= 0;  // Clear send_image when transitioning to S_IDLE
+      send_image_reg <= 0;
     end
-
-    heartbeat = ~heartbeat;
   end
 
   //===================================================
   // FSM Register
   //===================================================
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) ctrl_state <= S_IDLE;
-    else ctrl_state <= next_state;
+    if (!rst_n) begin
+      ctrl_state <= S_IDLE;
+    end else begin
+      ctrl_state <= next_state;
+    end
   end
 
   //===================================================
@@ -212,9 +214,17 @@ module controller_fsm (
         else next_state = S_IMG_RX;
       end
 
-      S_WAIT_INFERENCE: if (result_ready_sync2) next_state = S_CLEAR;
+      S_WAIT_INFERENCE: begin
+        if (result_ready_sync2) next_state = S_BNN_DONE;  // go to result stage
+      end
 
-      S_CLEAR: if (buffer_empty_sync2) next_state = S_IDLE;
+      S_BNN_DONE: begin
+        next_state = S_CLEAR;  // only then clear
+      end
+
+      S_CLEAR: begin
+        if (buffer_empty_sync2) next_state = S_IDLE;
+      end
 
       default: next_state = S_IDLE;
     endcase
@@ -255,7 +265,8 @@ module controller_fsm (
       end
 
       S_WAIT_INFERENCE: bnn_start = 1;
-      S_CLEAR:          clear_buffer = 1;
+
+      S_CLEAR: clear_buffer = 1;
 
       default: ;
     endcase
@@ -299,59 +310,5 @@ module controller_fsm (
     end
   end
 
-  always_ff @(posedge clk) begin
-    // Debug timeout counter
-    // if (rx_timeout_cnt > 0)
-    //   $display("[FSM]    (%0d): Timeout Counter: rx_timeout_cnt = %0d", cycle_cnt, rx_timeout_cnt);
-
-    // Debug FSM state transitions
-    if (ctrl_state != next_state)
-      $display(
-          "[FSM]    (%0d): State Transition: %s -> %s",
-          cycle_cnt,
-          ctrl_state.name(),
-          next_state.name()
-      );
-
-    // Debug when SPI command is received
-    // Removed debug for S_WAIT_BYTE:
-    // if (ctrl_state == S_WAIT_BYTE) begin
-    //   $display("[FSM]    (%0d): SPI Command Received: spi_rx_data = 0x%02X", cycle_cnt,
-    //            spi_rx_data);
-    //   $display("[FSM]    (%0d): status_request_reg = %b, img_tx_request_reg = %b", cycle_cnt,
-    //            status_request_reg, img_tx_request_reg);
-    // end
-
-    if (ctrl_state == S_RX_CMD && byte_valid_sync2)
-      $display("[FSM] Sampling command: 0x%02X in S_RX_CMD", spi_rx_data);
-
-    // if (ctrl_state == S_CMD_DISPATCH)
-    //   $display(
-    //       "[FSM] img_tx_request_reg=%b, status_request_reg=%b",
-    //       img_tx_request_reg,
-    //       status_request_reg
-    //   );
-
-
-    // Debug byte counter during image reception
-    if (ctrl_state == S_IMG_RX && byte_valid_sync2)
-      $display("[FSM]    (%0d): Byte Received: bytes_received = %0d", cycle_cnt, bytes_received);
-
-    // Debug when status_ready is asserted
-    if (ctrl_state == S_STATUS_READY)
-      $display("[FSM]   (%0d): Status Ready Asserted: cycle_cnt = %0d", cycle_cnt, cycle_cnt);
-
-    // Debug buffer clearing
-    if (ctrl_state == S_CLEAR)
-      $display(
-          "[FSM]    (%0d): Clearing Buffer: buffer_empty_sync2 = %b", cycle_cnt, buffer_empty_sync2
-      );
-
-    // Debug waiting for inference
-    if (ctrl_state == S_WAIT_INFERENCE && result_ready_sync2 != prev_result_ready_sync2) begin
-      $display("[FSM]    (%0d): Waiting for Inference: result_ready_sync2 = %b", cycle_cnt,
-               result_ready_sync2);
-    end
-  end
 
 endmodule

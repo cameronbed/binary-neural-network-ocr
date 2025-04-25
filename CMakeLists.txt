@@ -11,12 +11,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add all RTL source files
 set(RTL_SOURCES
-    # ${CMAKE_SOURCE_DIR}/src/fpga/system_controller.sv
+    ${CMAKE_SOURCE_DIR}/src/fpga/system_controller.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/spi_peripheral.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_interface.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/debug_module.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/fsm_controller.sv
-    ${CMAKE_SOURCE_DIR}/src/fpga/top.sv
+    # ${CMAKE_SOURCE_DIR}/src/fpga/top.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/image_buffer.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/bnn_top.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/Comparator.sv
@@ -49,7 +49,7 @@ add_custom_command(
         -j 0
         --trace
         --timing
-        --top-module top
+        --top-module system_controller
         -I${CMAKE_SOURCE_DIR}/src/fpga
         -I${CMAKE_SOURCE_DIR}/src/fpga/bnn_module
         --Mdir ${OBJ_DIR}

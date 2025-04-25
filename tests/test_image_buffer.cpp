@@ -7,7 +7,7 @@
 #include <iomanip>   // Added for std::setw and std::setfill
 #include <vector>
 
-void test_image_buffer(Vtop *dut)
+void test_image_buffer(Vsystem_controller *dut)
 {
     std::cout << "\n[TB IMG] test_image_write_and_fsm... [Clock cycles: " << main_time << "]\n";
 

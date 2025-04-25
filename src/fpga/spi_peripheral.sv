@@ -59,6 +59,10 @@ module spi_peripheral #(
   logic [$clog2(IMG_BYTE_COUNT)-1:0] img_byte_cnt;  // Adjust width to match IMG_BYTE_COUNT
   logic [31:0] spi_timeout_cnt;  // timeout counter
 
+  logic [31:0] cycle_cnt;
+  spi_state_t prev_spi_state;
+  logic prev_cs_sync_2, prev_rx_mode;
+
   //===================================================
   // Input Synchronization
   //===================================================
@@ -206,9 +210,7 @@ module spi_peripheral #(
   //===================================================
   assign spi_byte_valid = byte_valid_int;
 
-  logic [31:0] cycle_cnt;
-  spi_state_t prev_spi_state;
-  logic prev_cs_sync_2, prev_rx_mode;
+
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

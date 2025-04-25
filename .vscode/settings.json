@@ -59,14 +59,14 @@
     "span": "cpp",
     "variant": "cpp"
   },
-  // Language-specific (example: only for Python)
   "[systemverilog]": {
     "editor.defaultFormatter": "bmpenuelas.systemverilog-formatter-vscode"
   },
   "github.copilot.enable": {
-    "*": false,
+    "*": true,
     "plaintext": true,
     "markdown": false,
     "scminput": false
-  }
+  },
+  "systemverilogFormatter.veribleBuild": "win64"
 }
