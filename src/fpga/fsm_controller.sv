@@ -201,6 +201,7 @@ module controller_fsm (
       end
 
       S_RESULT_RDY: begin
+        rx_enable = 1;
         if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
           next_state = S_CLEAR;
           next_status_code_reg = STATUS_IDLE;
