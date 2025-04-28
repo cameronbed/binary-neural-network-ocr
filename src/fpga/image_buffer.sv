@@ -2,90 +2,72 @@
 module image_buffer (
     input logic clk,
     input logic rst_n,
+    input logic [31:0] main_cycle_cnt,
+    input logic [31:0] sclk_cycle_cnt,
 
-    //
     input logic clear_buffer,
     input logic [7:0] data_in,
-    input logic write_enable,
-    output logic full,
-    output logic empty,
-    output logic [9:0] write_addr,
+
+    input logic write_request,
+    output logic write_ready,
+    output logic [6:0] write_addr,
+
+
+
+    output logic buffer_full,
+    output logic buffer_empty,
+
     output logic [903:0] img_out
 );
   parameter int IMG_WIDTH = 30;
   parameter int IMG_HEIGHT = 30;
-  parameter int ADDR_INC = 8;
   parameter int TOTAL_BITS = 904;
+  parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
 
   logic [TOTAL_BITS-1:0] img_buffer;
+  logic [6:0] write_addr_internal;
+  logic [6:0] next_addr_ff;
 
-  logic [31:0] write_ptr, next_ptr;
-  assign next_ptr = write_ptr + ADDR_INC;
-
-`ifdef SYNTHESIS
-  logic [31:0] cycle_cnt;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) cycle_cnt <= 32'd0;
-    else cycle_cnt <= cycle_cnt + 1;
-  end
-`endif
-
-  // ----------------------- Image Buffer Write Logic -----------------------
+  //===================================================
+  // Write Logic + next‐addr tracking
+  //===================================================
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      write_ptr  <= 32'd0;
-      img_buffer <= '0;
+      write_addr_internal <= 7'd0;
+      next_addr_ff        <= 7'd0;
+      img_buffer          <= '0;
     end else if (clear_buffer) begin
-      write_ptr  <= 32'd0;
-      img_buffer <= '0;
-    end else if (write_enable) begin
-      if ((write_ptr + ADDR_INC) <= TOTAL_BITS) begin
-        // Map the byte directly: data_in[7] at msb end of slice
-        img_buffer[write_ptr+:ADDR_INC] <= data_in;
-        write_ptr <= next_ptr;  // Increment the write pointer
-      end
-
-`ifdef SYNTHESIS
-      $display("[IMG Buffer] Cycle %0d: Wrote %b to addr %0d (write_ptr=%0d)", cycle_cnt, data_in,
-               write_ptr, write_ptr);
-      //      $display("[IMG Buffer Debug] Current img_buffer state: %b", img_buffer);
-`endif
-    end
-  end
-
-`ifdef SYNTHESIS
-  always_ff @(posedge clk) begin
-    if (write_enable) begin
-      $display("[IMG Buffer Debug] Cycle %0d: Writing %b at write_ptr=%0d", cycle_cnt, data_in,
-               write_ptr);
-      //$display("[IMG Buffer Debug] Current img_buffer state: %b", img_buffer);
-    end
-  end
-
-  // Catch pointer overflow in simulation
-  always_ff @(posedge clk) begin
-    assert (write_ptr < TOTAL_BITS + ADDR_INC)
-    else $error("ImageBuffer write_ptr OOR: %0d (max %0d)", write_ptr, TOTAL_BITS + ADDR_INC - 1);
-  end
-`endif
-
-  // -------------------- Status Flags --------------------
-  logic full_flag, empty_flag;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || clear_buffer) begin
-      full_flag  <= 1'b0;
-      empty_flag <= 1'b1;
+      write_addr_internal <= 7'd0;
+      next_addr_ff        <= 7'd0;
+      img_buffer          <= '0;
     end else begin
-      full_flag  <= (write_ptr >= TOTAL_BITS);
-      empty_flag <= (write_ptr == 32'd0);
+      // default: don’t advance pointer
+      next_addr_ff <= write_addr_internal;
+
+      if (write_request && (write_addr_internal < IMG_BYTE_SIZE)) begin
+        img_buffer[write_addr_internal*8+:8] <= data_in;
+        write_addr_internal <= write_addr_internal + 1;
+        next_addr_ff <= write_addr_internal + 1;
+      end
     end
   end
 
-  // -------------------- Outputs --------------------
-  assign img_out    = img_buffer;  // Ensure widths match
-  assign write_addr = write_ptr[9:0];
-  assign full       = full_flag;
-  assign empty      = empty_flag;
+  //===================================================
+  // Status Flag and outputs
+  //===================================================
+  assign write_ready = (write_addr_internal < IMG_BYTE_SIZE);
+  assign buffer_full = (next_addr_ff >= IMG_BYTE_SIZE);
+  assign buffer_empty = (write_addr_internal == 0);
+  assign write_addr = write_addr_internal;
+  assign img_out = img_buffer;
+
+  // -------------------- Assertions for Simulation --------------------
+  always_ff @(posedge clk) begin
+    assert (write_addr_internal <= IMG_BYTE_SIZE)
+    else
+      $error(
+          "ImageBuffer write_addr_internal OOR: %0d (max %0d)", write_addr_internal, IMG_BYTE_SIZE
+      );
+  end
 
 endmodule

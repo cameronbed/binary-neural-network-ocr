@@ -5,122 +5,107 @@
 #include <string_view>
 #include <cstdlib>
 #include <cassert>
-#include <stdexcept> // For std::invalid_argument
-#include <iomanip>   // Added for std::setw and std::setfill
-
+#include <stdexcept>
+#include <iomanip>
 #include <format>
 
 constexpr int HALF_PERIOD_NS = 5;
 
-inline void tick(Vsystem_controller *dut, int cycles = 1)
+void sclk_rise(Vsystem_controller *dut)
 {
-    static_assert(std::is_same_v<vluint64_t, decltype(main_time)>,
-                  "main_time must be vluint64_t");
+    dut->SCLK = 1;
+    dut->eval();
+    tick_main_clk(dut, 2); // Hold SCLK high for setup/sample
+}
 
-    if (!dut || cycles <= 0)
-        return;
+void sclk_fall(Vsystem_controller *dut)
+{
+    dut->SCLK = 0;
+    dut->eval();
+    tick_main_clk(dut, 2); // Hold SCLK low after sample
+}
 
-    for (int i = 0; i < cycles * 2; ++i)
+void tick_main_clk(Vsystem_controller *dut, int cycles)
+{
+    for (int i = 0; i < cycles; i++)
     {
         dut->clk = !dut->clk;
         dut->eval();
-        if (dut->clk) // Increment main_time only on rising edge of clk
-        {
-            main_time += HALF_PERIOD_NS;
-        }
+
+        if (dut->clk)
+            main_clk_ticks++;
     }
 }
 
-void spi_send_byte(Vsystem_controller *dut, uint8_t byte, int mode, bool verbose, bool keep_cs = false)
+void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
 {
-
     if (!dut)
-        return;
-    if (mode < 0 || mode > 3)
-        throw std::invalid_argument("SPI mode must be 0‑3");
+        throw std::invalid_argument("spi_send_byte: DUT pointer is null!");
 
-    const bool CPOL = (mode & 0b10) >> 1;
-    const bool CPHA = (mode & 0b01);
+    dut->spi_cs_n = 0; // Start transaction
+    dut->eval();
+    tick_main_clk(dut, 2); // Setup time after CS_N falling
 
-    auto set_sclk = [&](bool level)
+    if (VERBOSE)
     {
-        dut->SCLK = level;
-        tick(dut, 1);
-        dut->eval(); // Ensure the signal propagates
-    };
-
-    // --- Prepare bus ---
-    set_sclk(CPOL); // Set idle clock state before asserting spi_cs_n
-
-    dut->spi_cs_n = 1; // ensure spi_cs_n idle high
-    dut->eval();       // explicit settle
-    tick(dut, 1);
-
-    dut->spi_cs_n = 0; // start transaction
-    dut->eval();       // explicit settle
-    tick(dut, 2);      // settle before first bit
-
-    // --- Bit transmission loop ---
-    for (int i = 7; i >= 0; --i)
-    {
-        bool bit = (byte >> i) & 1;
-        if (CPHA == 0)
-        {
-            dut->COPI = bit;
-            dut->eval();
-            set_sclk(!CPOL);
-            tick(dut, 1);
-            set_sclk(CPOL);
-            tick(dut, 1);
-        }
-        else
-        {
-            set_sclk(!CPOL);
-            tick(dut, 1);
-            dut->COPI = bit;
-            dut->eval();
-            set_sclk(CPOL);
-            tick(dut, 1);
-        }
-
-        // Debug output for each bit
-        if (verbose)
-        {
-            std::cout << "[SPI TB] (" << std::dec << main_time / HALF_PERIOD_NS << "): bit=" << i
-                      << " | COPI=" << bit
-                      << " | SCLK=" << int(dut->SCLK)
-                      << " | Byte=0x" << std::hex << std::setw(2) << std::setfill('0') << int(byte)
-                      << "\n";
-        }
+        debug(dut);
+        std::cout << "[SPI] Sending byte: 0x" << std::hex << (int)byte_val << "\n";
     }
 
-    // --- Post-transaction cleanup ---
-    tick(dut, 2); // settle after last bit
-
-    if (!keep_cs)
+    for (int i = 7; i >= 0; i--)
     {
-        dut->spi_cs_n = 1; // release spi_cs_n
+        bool bit_val = (byte_val >> i) & 0x1;
+
+        dut->COPI = bit_val;
         dut->eval();
-        tick(dut, 1);
+        tick_main_clk(dut, 2); // Setup time before SCLK rising
+
+        sclk_rise(dut); // Rising edge
+        sclk_fall(dut); // Falling edge
+
+        if (VERBOSE)
+            debug(dut);
+    }
+
+    dut->spi_cs_n = 1; // End transaction
+    dut->eval();
+    tick_main_clk(dut, 10); // Wait after CS_N goes high
+
+    if (VERBOSE)
+    {
+        debug(dut);
+        std::cout << "[SPI] Byte sent: 0x" << std::hex << (int)byte_val << "\n";
     }
 }
 
-void do_reset(Vsystem_controller *dut, int cycles, bool verbose = false)
+void spi_send_bytes(Vsystem_controller *dut, const std::vector<uint8_t> &bytes)
+{
+    for (auto byte : bytes)
+    {
+        spi_send_byte(dut, byte);
+    }
+}
+
+void do_reset(Vsystem_controller *dut)
 {
     if (!dut)
-        return;
+        throw std::invalid_argument("do_reset: DUT pointer is null!");
 
-    dut->rst_n_pin = 0; // Assert reset
-    main_time = 0;      // Reset main_time
-    tick(dut, cycles);
-    dut->rst_n_pin = 1; // Deassert reset
-    tick(dut, cycles);
-    tick(dut, 1); // extra settle cycle
+    int cycles = 1;
 
-    if (verbose)
+    dut->rst_n_pin = 0;         // Assert reset
+    tick_main_clk(dut, cycles); // Tick system clock during reset
+
+    dut->rst_n_pin = 1;         // Deassert reset
+    tick_main_clk(dut, cycles); // Tick system clock after reset
+
+    tick_main_clk(dut, cycles); // extra settle cycle
+
+    main_clk_ticks = 0;
+
+    if (VERBOSE)
     {
-        std::cout << "[RST DEBUG]: Reset asserted for " << cycles << " cycles.\n";
-        std::cout << "[RST DEBUG]: Current time: " << std::dec << main_time << "\n";
+        std::cout << "[RST DEBUG]: Reset completed over " << 3 * cycles << " cycles.\n";
     }
 }
 
@@ -130,13 +115,24 @@ void debug(Vsystem_controller *dut)
         return;
 
     dut->debug_trigger = 1; // Assert debug_trigger
-    tick(dut, 1);
+    tick_main_clk(dut, 2);
 
     // Debug output for debug trigger
-    std::cout << "[DEBUG TRIGGER]: Trigger asserted at time " << main_time << "\n";
+    std::cout << "[DEBUG TRIGGER]: Trigger asserted at time " << main_clk_ticks << "\n";
 
     dut->debug_trigger = 0; // Deassert debug_trigger
-    tick(dut, 1);           // Allow signal to settle
+    tick_main_clk(dut, 2);  // Allow signal to settle
 
-    std::cout << "[DEBUG TRIGGER]: Trigger deasserted at time " << main_time << "\n";
+    std::cout << "[DEBUG TRIGGER]: Trigger deasserted at time " << main_clk_ticks << "\n";
+}
+
+void check_fsm_state(Vsystem_controller *dut, int expected_state, const std::string &state_name)
+{
+    if (dut->status_code_reg != expected_state)
+    {
+        std::cerr << "❌ Expected " << state_name << " (" << expected_state
+                  << "), but got " << (int)dut->status_code_reg << "\n";
+        assert(dut->status_code_reg == expected_state);
+    }
+    std::cout << "✅ [PASS] FSM moved to " << state_name << "\n";
 }

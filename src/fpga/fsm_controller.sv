@@ -1,314 +1,226 @@
 `timescale 1ns / 1ps
 
 module controller_fsm (
-    input  logic clk,
-    input  logic rst_n,
-    output logic heartbeat,
+    input logic clk,
+    input logic rst_n,
+    input logic [31:0] main_cycle_cnt,
+    input logic [31:0] sclk_cycle_cnt,
 
     // SPI interface
-    input  logic       spi_cs_n,
     input  logic [7:0] spi_rx_data,
     input  logic       spi_byte_valid,
     output logic       byte_taken,
     output logic       rx_enable,
 
-    // Commands
-    output logic send_image,
-    output logic status_ready,
+    // Commands output signals
+    output logic [3:0] status_code_reg,
 
     // Image Buffer
     input  logic buffer_full,
     input  logic buffer_empty,
-    output logic clear_buffer,
-    output logic buffer_write_enable,
+    output logic clear,
+
+    output logic buffer_write_request,
+    input  logic buffer_write_ready,
+
+    output logic [7:0] buffer_write_data,
+    output logic [6:0] buffer_write_addr,
 
     // BNN interface
     input  logic       result_ready,
     input  logic [3:0] result_out,
-    output logic       bnn_start,
-    output logic [3:0] fsm_state
+    output logic       bnn_enable
 );
+  parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
+
+  // Receive codes
+  parameter logic [7:0] CMD_IMG_SEND_REQUEST = 8'hFE;  // 11111101
+  parameter logic [7:0] CMD_CLEAR = 8'hFD;  // 11111011
+
+  // Status codes
+  localparam logic [3:0] STATUS_IDLE = 4'b0000;  // 0 - FPGA idle, ready
+  localparam logic [3:0] STATUS_RX_IMG_RDY = 4'b0001;  // 1 - Receiving image bytes
+  localparam logic [3:0] STATUS_RX_IMG = 4'b0010;  // 2 - SPI bytes sent are being put in the buffer
+  localparam logic [3:0] STATUS_BNN_BUSY = 4'b0100;  //  4 - Image received, BNN running
+  localparam logic [3:0] STATUS_RESULT_RDY = 4'b1000;  // 8 - BNN result ready
+  localparam logic [3:0] STATUS_ERROR = 4'b1110;  // 14 - Error occurred
+  localparam logic [3:0] STATUS_UNKNOWN = 4'b1111;  // 15- busy
 
   // FSM states (now 4 bits)
-  typedef enum logic [3:0] {
+  typedef enum logic [2:0] {
     S_IDLE,
-    S_RX_CMD,
-    S_CMD_LATCH,
+    S_WAIT_IMAGE,
     S_IMG_RX,
-    S_CMD_DISPATCH,
-    S_STATUS_READY,
-    S_WAIT_INFERENCE,
-    S_BNN_DONE,
+    S_WAIT_FOR_BNN,
+    S_RESULT_RDY,
     S_CLEAR
   } fsm_state_t;
 
-  fsm_state_t ctrl_state, next_state;
+  fsm_state_t current_state, next_state;
 
-  logic [7:0] command_byte;
+  logic [3:0] next_status_code_reg;
+  logic [6:0] buffer_write_addr_int;
 
-  // Constants
-  parameter int IMG_BIT_SIZE = 900;
-  parameter logic [9:0] IMG_BYTE_SIZE = 10'd113;
-  parameter int TIMEOUT_LIMIT = 100_000;
-  parameter logic [7:0] STATUS_REQUEST_CODE = 8'hFE;
-  parameter logic [7:0] IMG_TX_REQUEST_CODE = 8'hBF;
-
-  // Internal state
-  logic [31:0] cycle_cnt;
-  logic [31:0] rx_timeout_cnt;
-  logic [ 9:0] bytes_received;
-  logic [ 9:0] debug_bytes_received;
-
-  // Async synchronizers
-  logic cs_sync1, cs_sync2;
-  logic byte_valid_sync1, byte_valid_sync2;
-  logic result_ready_sync1, result_ready_sync2;
-  logic buffer_empty_sync1, buffer_empty_sync2;
-
-  // one‑cycle‑back copy for edge detect
-  logic prev_byte_valid_sync2_ff;
-
-  // Command latch
-  logic status_request_reg;
-  logic img_tx_request_reg;
-  logic prev_status_request_reg, prev_img_tx_request_reg;
-
-  // Edge detection
-  wire cs_falling = ~cs_sync1 && cs_sync2;
-  wire cs_rising = cs_sync1 && ~cs_sync2;
-
-  assign debug_bytes_received = bytes_received;
-
-  logic status_ready_reg;
-  logic send_image_reg;
-  assign status_ready = status_ready_reg;
-  assign send_image   = send_image_reg;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      status_ready_reg <= 0;
-    end else if (ctrl_state == S_STATUS_READY) begin
-      status_ready_reg <= 1;
-    end else if (ctrl_state == S_IDLE && next_state == S_RX_CMD) begin
-      status_ready_reg <= 0;
-    end
-  end
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      send_image_reg <= 0;
-    end else if (ctrl_state == S_CMD_DISPATCH && img_tx_request_reg) begin
-      send_image_reg <= 1;
-    end else if (next_state == S_IDLE) begin
-      send_image_reg <= 0;
-    end
-  end
+  logic byte_taken_comb;
+  logic prev_spi_byte_valid;
+  logic new_spi_byte;
+  logic buffer_full_sync;
 
   //===================================================
-  // FSM Register
+  // FSM Next, Status Code, Buffer Write Address Register
   //===================================================
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      ctrl_state <= S_IDLE;
+      current_state <= S_IDLE;
+      status_code_reg <= STATUS_IDLE;
+      buffer_write_addr_int <= 0;
+      byte_taken <= 0;
+      prev_spi_byte_valid <= 0;
+      buffer_full_sync <= 0;
+
     end else begin
-      ctrl_state <= next_state;
+      current_state       <= next_state;
+      status_code_reg     <= next_status_code_reg;
+      byte_taken          <= byte_taken_comb;
+      prev_spi_byte_valid <= spi_byte_valid;
+      buffer_full_sync    <= buffer_full;
+
+      if (current_state == S_IDLE && spi_byte_valid && spi_rx_data == CMD_CLEAR)
+        buffer_write_addr_int <= 0;
+      else if (current_state == S_IMG_RX && new_spi_byte)
+        buffer_write_addr_int <= buffer_write_addr_int + 1;
     end
   end
 
-  //===================================================
-  // Command Decoding
-  //===================================================
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      status_request_reg      <= 0;
-      img_tx_request_reg      <= 0;
-      prev_status_request_reg <= 0;
-      prev_img_tx_request_reg <= 0;
-
-    end else if (ctrl_state == S_RX_CMD && byte_valid_sync2) begin
-      command_byte <= spi_rx_data;
-
-    end else if (ctrl_state == S_CMD_LATCH) begin
-      status_request_reg <= (command_byte == STATUS_REQUEST_CODE);
-      img_tx_request_reg <= (command_byte == IMG_TX_REQUEST_CODE);
-
-      $display("[FSM] Decoding command_byte = 0x%02X", command_byte);
-
-      // Only print when there’s a change and the command is recognized
-      if ((img_tx_request_reg != prev_img_tx_request_reg || status_request_reg != prev_status_request_reg) &&
-        (img_tx_request_reg || status_request_reg)) begin
-        $display("[FSM] Recognized command: IMG_TX=%b, STATUS=%b", img_tx_request_reg,
-                 status_request_reg);
-      end
-
-      // Only print once for unrecognized commands
-      if (!img_tx_request_reg && !status_request_reg &&
-        (prev_img_tx_request_reg || prev_status_request_reg)) begin
-        $display("[FSM] Unrecognized command: 0x%02X at cycle %0d", command_byte, cycle_cnt);
-      end
-
-      prev_status_request_reg <= status_request_reg;
-      prev_img_tx_request_reg <= img_tx_request_reg;
-
-    end else if (ctrl_state == S_IDLE) begin
-      status_request_reg      <= 0;
-      img_tx_request_reg      <= 0;
-      prev_status_request_reg <= 0;
-      prev_img_tx_request_reg <= 0;
-    end
-  end
-
-
+  assign new_spi_byte = spi_byte_valid && !prev_spi_byte_valid;
 
   //===================================================
-  // Byte Counter
-  //===================================================
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) bytes_received <= 0;
-    else if (ctrl_state == S_IMG_RX && byte_valid_sync2 && !prev_byte_valid_sync2_ff)
-      bytes_received <= bytes_received + 1;
-    else if (ctrl_state == S_IDLE) bytes_received <= 0;
-  end
-
-  //===================================================
-  // Timeout + Debug Counter
-  //===================================================
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      rx_timeout_cnt <= 0;
-      cycle_cnt <= 0;
-    end else begin
-      cycle_cnt <= cycle_cnt + 1;
-      if (ctrl_state == S_RX_CMD || ctrl_state == S_IMG_RX) rx_timeout_cnt <= rx_timeout_cnt + 1;
-      else rx_timeout_cnt <= 0;
-    end
-  end
-
-  //===================================================
-  // FSM Next State Logic
+  // FSM State
   //===================================================
   always_comb begin
-    next_state = ctrl_state;
+    byte_taken_comb = 0;  // default
+    rx_enable = 0;
+    buffer_write_data = 0;
+    buffer_write_addr = buffer_write_addr_int;
+    bnn_enable = 0;
+    clear = 0;
+    buffer_write_request = 0;
 
-    case (ctrl_state)
-      S_IDLE: if (cs_falling) next_state = S_RX_CMD;
+    next_state = current_state;
+    next_status_code_reg = status_code_reg;
 
-      S_RX_CMD: begin
-        if (rx_timeout_cnt >= TIMEOUT_LIMIT) next_state = S_IDLE;
-        else if (byte_valid_sync2) next_state = S_CMD_LATCH;
-      end
+    // Debug print for state transitions or new SPI byte
+    // if (current_state != next_state) begin
+    //   $display("[DEBUG][FSM] Cycle: %0d, FSM State Transition: %s -> %s", main_cycle_cnt,
+    //            current_state.name(), next_state.name());
+    // end else if (new_spi_byte) begin
+    //   $display("[DEBUG][FSM] Cycle: %0d, New SPI Byte Received: %h", main_cycle_cnt, spi_rx_data);
+    // end
 
-      S_CMD_LATCH: next_state = S_CMD_DISPATCH;
-
-      S_CMD_DISPATCH:
-      if (img_tx_request_reg) next_state = S_IMG_RX;
-      else if (status_request_reg) next_state = S_STATUS_READY;
-
-      S_STATUS_READY: next_state = S_IDLE;
-
-      S_IMG_RX: begin
-        if (bytes_received == IMG_BYTE_SIZE) next_state = S_WAIT_INFERENCE;
-        else if (rx_timeout_cnt >= TIMEOUT_LIMIT) next_state = S_IDLE;
-        else if (cs_rising)  // abort image RX on CS deassert
-          next_state = S_IDLE;
-        else next_state = S_IMG_RX;
-      end
-
-      S_WAIT_INFERENCE: begin
-        if (result_ready_sync2) next_state = S_BNN_DONE;  // go to result stage
-      end
-
-      S_BNN_DONE: begin
-        next_state = S_CLEAR;  // only then clear
-      end
-
-      S_CLEAR: begin
-        if (buffer_empty_sync2) next_state = S_IDLE;
-      end
-
-      default: next_state = S_IDLE;
-    endcase
-  end
-
-  //===================================================
-  // Capture previous valid sync for edge detect
-  //===================================================
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) prev_byte_valid_sync2_ff <= 1'b0;
-    else prev_byte_valid_sync2_ff <= byte_valid_sync2;
-  end
-
-  //===================================================
-  // FSM Output Control
-  //===================================================
-  always_comb begin
-    rx_enable           = 0;
-    clear_buffer        = 0;
-    buffer_write_enable = 0;
-    bnn_start           = 0;
-    byte_taken          = 0;
-
-    unique case (ctrl_state)
-      S_RX_CMD: begin
+    case (current_state)
+      S_IDLE: begin
         rx_enable = 1;
-        // only on the synced-byte rising edge
-        if (byte_valid_sync2 && !prev_byte_valid_sync2_ff) byte_taken = 1;
-      end
 
-      S_IMG_RX: begin
-        rx_enable = 1;
-        // only when buffer not full
-        if (!buffer_full && byte_valid_sync2 && !prev_byte_valid_sync2_ff) begin
-          buffer_write_enable = 1;
-          byte_taken          = 1;
+        if (buffer_full_sync) begin
+          next_state = S_WAIT_FOR_BNN;
+          next_status_code_reg = STATUS_BNN_BUSY;
+
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+            next_status_code_reg = STATUS_IDLE;
+            clear = 1;
+            byte_taken_comb = 1;
+
+          end else if (spi_rx_data == CMD_IMG_SEND_REQUEST) begin
+            next_state = S_WAIT_IMAGE;
+            next_status_code_reg = STATUS_RX_IMG_RDY;
+            byte_taken_comb = 1;
+
+          end else if (buffer_write_ready) begin
+            buffer_write_request = 1;
+            buffer_write_data = spi_rx_data;
+            byte_taken_comb = 1;
+
+          end else begin
+            next_status_code_reg = STATUS_ERROR;
+            byte_taken_comb = 1;
+          end
         end
       end
 
-      S_WAIT_INFERENCE: bnn_start = 1;
+      S_WAIT_IMAGE: begin
+        rx_enable = 1;
+        if (new_spi_byte) begin
+          next_state = S_IMG_RX;
+          next_status_code_reg = STATUS_RX_IMG;
+          byte_taken_comb = 1;
 
-      S_CLEAR: clear_buffer = 1;
+          buffer_write_request = 1;
+          buffer_write_data = spi_rx_data;
+        end
+      end
 
-      default: ;
+      S_IMG_RX: begin
+        rx_enable = 1;
+        if (buffer_full_sync) begin
+          next_state = S_WAIT_FOR_BNN;
+          next_status_code_reg = STATUS_BNN_BUSY;
+
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+            next_status_code_reg = STATUS_IDLE;
+            clear = 1;
+            byte_taken_comb = 1;
+
+          end else begin
+            buffer_write_request = 1;
+            buffer_write_data = spi_rx_data;
+            byte_taken_comb = 1;
+          end
+        end
+      end
+
+      S_WAIT_FOR_BNN: begin
+        bnn_enable = 1;
+        rx_enable  = 1;
+
+        if (result_ready) begin
+          next_state = S_RESULT_RDY;
+          next_status_code_reg = STATUS_RESULT_RDY;
+
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+            next_status_code_reg = STATUS_IDLE;
+            clear = 1;
+            byte_taken_comb = 1;
+          end
+        end
+      end
+
+      S_RESULT_RDY: begin
+        if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
+          next_state = S_CLEAR;
+          next_status_code_reg = STATUS_IDLE;
+          byte_taken_comb = 1;
+        end
+      end
+
+      S_CLEAR: begin
+        clear = 1;
+        if (buffer_empty) begin
+          next_state = S_IDLE;
+          next_status_code_reg = STATUS_IDLE;
+        end
+      end
+
+      default: begin
+        next_state = S_IDLE;
+        next_status_code_reg = STATUS_ERROR;
+      end
     endcase
   end
-
-  //===================================================
-  // Synchronizers
-  //===================================================
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      cs_sync1 <= 1'b1;
-      cs_sync2 <= 1'b1;
-      byte_valid_sync1 <= 1'b0;
-      byte_valid_sync2 <= 1'b0;
-      buffer_empty_sync1 <= 1'b0;
-      buffer_empty_sync2 <= 1'b0;
-      result_ready_sync1 <= 1'b0;
-      result_ready_sync2 <= 1'b0;
-    end else begin
-      cs_sync1 <= spi_cs_n;
-      cs_sync2 <= cs_sync1;
-      byte_valid_sync1 <= spi_byte_valid;
-      byte_valid_sync2 <= byte_valid_sync1;
-      buffer_empty_sync1 <= buffer_empty;
-      buffer_empty_sync2 <= buffer_empty_sync1;
-      result_ready_sync1 <= result_ready;
-      result_ready_sync2 <= result_ready_sync1;
-    end
-  end
-
-  //===================================================
-  // Optional Debug
-  //===================================================
-  logic prev_result_ready_sync2;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      prev_result_ready_sync2 <= 0;
-    end else begin
-      prev_result_ready_sync2 <= result_ready_sync2;
-    end
-  end
-
 
 endmodule
