@@ -34,7 +34,7 @@ module bnn_interface (
 
   logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in_truncated[0:CONV1_IC-1];
 
-  assign img_in_truncated[0] = img_in[903:4];
+  assign img_in_truncated[0] = img_in[899:0];
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
