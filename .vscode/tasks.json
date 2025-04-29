@@ -10,6 +10,12 @@
         "isDefault": true
       },
       "problemMatcher": []
+    },
+    {
+      "label": "format on save",
+      "type": "shell",
+      "command": "echo File saved!", // Replace with your real command
+      "problemMatcher": []
     }
   ]
 }

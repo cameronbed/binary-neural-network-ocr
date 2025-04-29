@@ -3,123 +3,224 @@
 module controller_fsm (
     input logic clk,
     input logic rst_n,
+    input logic [31:0] main_cycle_cnt,
+    input logic [31:0] sclk_cycle_cnt,
 
-    // Inputs from submodules / external
-    input  logic CS,            // Chip Select from SPI master
-    input  logic byte_valid,    // SPI byte received
-    output logic byte_ready,    // SPI byte ready signal
-    input  logic spi_error,     // SPI error flag
+    // SPI interface
+    input  logic [7:0] spi_rx_data,
+    input  logic       spi_byte_valid,
+    output logic       byte_taken,
+    output logic       rx_enable,
+
+    // Commands output signals
+    output logic [3:0] status_code_reg,
+
+    // Image Buffer
     input  logic buffer_full,
     input  logic buffer_empty,
-    input  logic result_ready,
+    output logic clear,
 
-    // Outputs to control other modules
-    output logic       rx_enable,            // Enables SPI RX
-    output logic       tx_enable,            // Enables SPI TX
-    output logic       clear_buffer,         // Resets buffer
-    output logic       buffer_write_enable,  // Enables inference/load
-    output logic [2:0] current_state         // Expose state for debug
+    output logic buffer_write_request,
+    input  logic buffer_write_ready,
+
+    output logic [7:0] buffer_write_data,
+    output logic [6:0] buffer_write_addr,
+
+    // BNN interface
+    input  logic       result_ready,
+    input  logic [3:0] result_out,
+    output logic       bnn_enable
 );
+  parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
 
-  // -------------------------
-  // State Definition
-  // -------------------------
+  // Receive codes
+  parameter logic [7:0] CMD_IMG_SEND_REQUEST = 8'hFE;  // 11111101
+  parameter logic [7:0] CMD_CLEAR = 8'hFD;  // 11111011
+
+  // Status codes
+  localparam logic [3:0] STATUS_IDLE = 4'b0000;  // 0 - FPGA idle, ready
+  localparam logic [3:0] STATUS_RX_IMG_RDY = 4'b0001;  // 1 - Receiving image bytes
+  localparam logic [3:0] STATUS_RX_IMG = 4'b0010;  // 2 - SPI bytes sent are being put in the buffer
+  localparam logic [3:0] STATUS_BNN_BUSY = 4'b0100;  //  4 - Image received, BNN running
+  localparam logic [3:0] STATUS_RESULT_RDY = 4'b1000;  // 8 - BNN result ready
+  localparam logic [3:0] STATUS_ERROR = 4'b1110;  // 14 - Error occurred
+  localparam logic [3:0] STATUS_UNKNOWN = 4'b1111;  // 15- busy
+
+  // FSM states (now 4 bits)
   typedef enum logic [2:0] {
-    IDLE,
-    RX,
-    IMG_RX,
-    INFERENCE,
-    RESULT_RDY,
-    TX,
-    CLEAR
-  } system_state_t;
-  system_state_t fsm_state, fsm_next_state, fsm_prev_state;
+    S_IDLE,
+    S_WAIT_IMAGE,
+    S_IMG_RX,
+    S_WAIT_FOR_BNN,
+    S_RESULT_RDY,
+    S_CLEAR
+  } fsm_state_t;
 
-  // -------------------------
-  // State Register
-  // -------------------------
+  fsm_state_t current_state, next_state;
+
+  logic [3:0] next_status_code_reg;
+  logic [6:0] buffer_write_addr_int;
+
+  logic byte_taken_comb;
+  logic prev_spi_byte_valid;
+  logic new_spi_byte;
+  logic buffer_full_sync;
+
+  //===================================================
+  // FSM Next, Status Code, Buffer Write Address Register
+  //===================================================
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) fsm_state <= IDLE;
-    else fsm_state <= fsm_next_state;
+    if (!rst_n) begin
+      current_state <= S_IDLE;
+      status_code_reg <= STATUS_IDLE;
+      buffer_write_addr_int <= 0;
+      byte_taken <= 0;
+      prev_spi_byte_valid <= 0;
+      buffer_full_sync <= 0;
+
+    end else begin
+      current_state       <= next_state;
+      status_code_reg     <= next_status_code_reg;
+      byte_taken          <= byte_taken_comb;
+      prev_spi_byte_valid <= spi_byte_valid;
+      buffer_full_sync    <= buffer_full;
+
+      if (current_state == S_IDLE && spi_byte_valid && spi_rx_data == CMD_CLEAR)
+        buffer_write_addr_int <= 0;
+      else if (current_state == S_IMG_RX && new_spi_byte)
+        buffer_write_addr_int <= buffer_write_addr_int + 1;
+    end
   end
 
-  // -------------------------
-  // Next-State Logic
-  // -------------------------
+  assign new_spi_byte = spi_byte_valid && !prev_spi_byte_valid;
+
+  //===================================================
+  // FSM State
+  //===================================================
   always_comb begin
-    fsm_next_state = fsm_state;
-    case (fsm_state)
-      IDLE: if (!CS) fsm_next_state = RX;  // Ensure transition to RX on CS low
+    byte_taken_comb = 0;  // default
+    rx_enable = 0;
+    buffer_write_data = 0;
+    buffer_write_addr = buffer_write_addr_int;
+    bnn_enable = 0;
+    clear = 0;
+    buffer_write_request = 0;
 
-      RX: begin
-        if (CS) fsm_next_state = IDLE;  // CS high, go to IDLE
-        else if (byte_valid) fsm_next_state = IMG_RX;  // Byte received, go to IMG_RX
+    next_state = current_state;
+    next_status_code_reg = status_code_reg;
+
+    // Debug print for state transitions or new SPI byte
+    // if (current_state != next_state) begin
+    //   $display("[DEBUG][FSM] Cycle: %0d, FSM State Transition: %s -> %s", main_cycle_cnt,
+    //            current_state.name(), next_state.name());
+    // end else if (new_spi_byte) begin
+    //   $display("[DEBUG][FSM] Cycle: %0d, New SPI Byte Received: %h", main_cycle_cnt, spi_rx_data);
+    // end
+
+    case (current_state)
+      S_IDLE: begin
+        rx_enable = 1;
+
+        if (buffer_full_sync) begin
+          next_state = S_WAIT_FOR_BNN;
+          next_status_code_reg = STATUS_BNN_BUSY;
+
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+            next_status_code_reg = STATUS_IDLE;
+            clear = 1;
+            byte_taken_comb = 1;
+
+          end else if (spi_rx_data == CMD_IMG_SEND_REQUEST) begin
+            next_state = S_WAIT_IMAGE;
+            next_status_code_reg = STATUS_RX_IMG_RDY;
+            byte_taken_comb = 1;
+
+          end else if (buffer_write_ready) begin
+            buffer_write_request = 1;
+            buffer_write_data = spi_rx_data;
+            byte_taken_comb = 1;
+
+          end else begin
+            next_status_code_reg = STATUS_ERROR;
+            byte_taken_comb = 1;
+          end
+        end
       end
 
-      IMG_RX: begin
-        if (buffer_full) fsm_next_state = INFERENCE;  // Buffer full, go to INFERENCE
-        else if (CS) fsm_next_state = IDLE;  // CS high, go to IDLE
-        else if (byte_valid) fsm_next_state = IMG_RX;  // Byte received, stay in IMG_RX
+      S_WAIT_IMAGE: begin
+        rx_enable = 1;
+        if (new_spi_byte) begin
+          next_state = S_IMG_RX;
+          next_status_code_reg = STATUS_RX_IMG;
+          byte_taken_comb = 1;
+
+          buffer_write_request = 1;
+          buffer_write_data = spi_rx_data;
+        end
       end
 
-      INFERENCE: if (result_ready) fsm_next_state = RESULT_RDY;
+      S_IMG_RX: begin
+        rx_enable = 1;
+        if (buffer_full_sync) begin
+          next_state = S_WAIT_FOR_BNN;
+          next_status_code_reg = STATUS_BNN_BUSY;
 
-      RESULT_RDY: if (CS) fsm_next_state = CLEAR;
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+            next_status_code_reg = STATUS_IDLE;
+            clear = 1;
+            byte_taken_comb = 1;
 
-      TX: begin
-        if (CS) fsm_next_state = IDLE;  // CS high, go to IDLE
-        else if (buffer_empty) fsm_next_state = IDLE;  // Buffer empty, go to IDLE
+          end else begin
+            buffer_write_request = 1;
+            buffer_write_data = spi_rx_data;
+            byte_taken_comb = 1;
+          end
+        end
       end
 
-      CLEAR: if (buffer_empty) fsm_next_state = IDLE;
+      S_WAIT_FOR_BNN: begin
+        bnn_enable = 1;
+        rx_enable  = 1;
 
-      default: fsm_next_state = IDLE;  // Add default case to handle incomplete coverage
-    endcase
-  end
+        if (result_ready) begin
+          next_state = S_RESULT_RDY;
+          next_status_code_reg = STATUS_RESULT_RDY;
 
-  // -------------------------
-  // Output / Control Logic
-  // -------------------------
-  always_comb begin
-    // Default values
-    rx_enable           = 1'b0;
-    tx_enable           = 1'b0;
-    clear_buffer        = 1'b0;
-    buffer_write_enable = 1'b0;
-    byte_ready          = 1'b0;
-
-    case (fsm_state)
-      IDLE: begin
-        rx_enable = 1'b0;  // Disable RX in IDLE
-        buffer_write_enable = 1'b0;  // Disable BNN write in IDLE
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+            next_status_code_reg = STATUS_IDLE;
+            clear = 1;
+            byte_taken_comb = 1;
+          end
+        end
       end
 
-      RX: begin
-        rx_enable = 1'b1;  // Enable RX when in RX state
-        buffer_write_enable = 1'b0;  // Disable BNN write in RX
+      S_RESULT_RDY: begin
+        rx_enable = 1;
+        if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
+          next_state = S_CLEAR;
+          next_status_code_reg = STATUS_IDLE;
+          byte_taken_comb = 1;
+        end
       end
 
-      IMG_RX: begin
-        rx_enable = byte_valid;
-        buffer_write_enable = byte_valid;  // Write each valid byte into image buffer
+      S_CLEAR: begin
+        clear = 1;
+        if (buffer_empty) begin
+          next_state = S_IDLE;
+          next_status_code_reg = STATUS_IDLE;
+        end
       end
 
-      INFERENCE: begin
+      default: begin
+        next_state = S_IDLE;
+        next_status_code_reg = STATUS_ERROR;
       end
-
-      RESULT_RDY: begin
-      end
-
-      TX: begin
-        tx_enable  = 1'b1;
-        byte_ready = 1'b1;  // Tell SPI to begin shifting out the byte
-      end
-
-      CLEAR: begin
-        clear_buffer = 1'b1;
-      end
-
-      default: ;
     endcase
   end
 

@@ -1,18 +1,26 @@
 `timescale 1ns / 1ps
-module bnn_interface #(
-    parameter int INFER_LATENCY = 2
-) (
+
+`include "bnn_module/bnn_top.sv"
+
+module bnn_interface (
     input logic clk,
     input logic rst_n,
+    input logic [31:0] main_cycle_cnt,
+    input logic [31:0] sclk_cycle_cnt,
 
     // Data
-    input logic img_in[0:783],
-    output logic [3:0] result_out,
+    input  logic [903:0] img_in,
+    output logic [  3:0] result_out,
 
     // Control
     input  logic img_buffer_full,
-    output logic result_ready
+    output logic result_ready,
+    input  logic bnn_enable,
+    input  logic bnn_clear
 );
+
+  parameter int CONV1_IMG_IN_SIZE = 30;
+  parameter int CONV1_IC = 1;
 
   typedef enum logic [1:0] {
     IDLE,
@@ -22,46 +30,70 @@ module bnn_interface #(
 
   bnn_state_t state, next_state;
 
+  logic result_ready_internal;
+
+  logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in_truncated[0:CONV1_IC-1];
+
+  assign img_in_truncated[0] = img_in[899:0];
+
+  // ----------------- BNN Module Instantiation -----------------
+  bnn_top u_bnn_top (
+      .clk(clk),
+      .img_in(img_in_truncated),
+      .data_in_ready(bnn_enable),
+      .result(result_out),
+      .data_out_ready(result_ready_internal)
+  );
+
   // ----------------------- FSM Next-State Logic ----------------------
   always_comb begin
     next_state = state;
     case (state)
       IDLE: begin
-        if (img_buffer_full) next_state = INFERENCE;
+        if (img_buffer_full && bnn_enable) next_state = INFERENCE;
       end
 
       INFERENCE: begin
-        next_state = DONE;
-      end
-      DONE: begin
-        next_state = IDLE;
+        if (result_ready_internal == 1) next_state = DONE;
       end
 
-      default: next_state = IDLE;  // Handle unexpected states
+      DONE: begin
+        if (bnn_clear) next_state = IDLE;
+      end
+
+      default: next_state = IDLE;
     endcase
   end
 
   // Main sequential logic
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      result_out <= 4'd0;
       result_ready <= 1'b0;
       state <= IDLE;
+
     end else begin
-      state <= next_state;  // Only update state here
+      state <= next_state;
+
       case (state)
         IDLE: begin
+          result_ready <= 1'b0;
         end
 
         INFERENCE: begin
-          result_out   <= 4'd1;
-          result_ready <= 1'b1;
+          if (result_ready_internal == 1) begin
+            result_ready <= 1'd1;
+          end
         end
 
         DONE: begin
+          if (bnn_clear) begin
+            result_ready <= 1'b0;  // clear result ready
+          end else begin
+            result_ready <= 1'b1;  // hold ready until clear
+          end
         end
 
-        default: ;
+        default: result_ready <= 1'b0;
       endcase
     end
   end

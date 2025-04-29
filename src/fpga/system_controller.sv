@@ -1,140 +1,253 @@
 `timescale 1ns / 1ps
-//`include "spi_peripheral.sv"
-//`include "bnn_interface.sv"
-//`include "debug_module.sv"
-//`include "fsm_controller.sv"
-//`include "image_buffer.sv"
+
+//`ifdef SYNTHESIS
+`include "spi_peripheral.sv"
+`include "bnn_interface.sv"
+`include "debug_module.sv"
+`include "fsm_controller.sv"
+`include "image_buffer.sv"
+//`endif
+
 module system_controller (
     input logic clk,
-    input logic rst_n,
+    input logic rst_n_pin,
+    input logic rst_n_sw_input,
+
+    // SPI
     input logic SCLK,
     input logic COPI,
-    input logic CS,
-    output logic CIPO,
-    output logic [3:0] result_out,
+    input logic spi_cs_n,
+
+    // System Outputs
+    output logic [3:0] status_code_reg,
+    output logic [6:0] seg,
+
+    output logic heartbeat,
+
+    //`ifndef SYNTHESIS
     input logic debug_trigger
+    //`endif
 );
-  // ------------------------ FSM Controller ---------------
-  logic [2:0] fsm_current_state;
-  logic rx_enable;  // Define rx_enable
-  logic tx_enable;  // Define tx_enable
-
-  // ------------------------ SPI Peripheral ---------------
-  // SPI Data
-  logic [7:0] rx_byte;
-  logic [7:0] tx_byte;  // Byte to be transmitted
-  // SPI Control Signals
-  logic byte_valid;
-  logic byte_ready;
-  logic buffer_full;
-  logic buffer_empty;
-  logic clear_buffer;
+  //===================================================
+  // Internal Signals
+  //===================================================
+  logic rst_n;
   logic result_ready;
-  logic spi_error;
+  logic send_image;
+  logic status_ready;
 
-  // ---------------------- Image Buffer ---------------
-  logic image_flat[0:783];  // 784 bits for 28x28 image
-  logic [9:0] image_write_addr;  // 10 bits for 1024 address space
-  logic buffer_write_enable;  // Buffer write enable signal
+  assign rst_n = rst_n_pin || sw_sync_1;
 
-  // ---------------------- Debug Module ---------------
+  // -------------- Debounch the switch ---------------------
+  logic sw_sync_0, sw_sync_1;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      sw_sync_0 <= 0;
+      sw_sync_1 <= 0;
+    end else begin
+      sw_sync_0 <= rst_n_sw_input;
+      sw_sync_1 <= sw_sync_0;
+    end
+  end
 
-  // ---------------------- bnn_interface ---------------
+  // ---------------------- Hearbeat
+  logic [31:0] main_cycle_cnt, sclk_cycle_cnt;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) heartbeat <= 0;
+    else begin
+      main_cycle_cnt <= main_cycle_cnt + 1;
+      if (SCLK) sclk_cycle_cnt <= sclk_cycle_cnt + 1;
+      heartbeat <= ~heartbeat;
+    end
+  end
 
-  // ----------------------- FSM Controller Instantiation -----------------------
+  //===================================================
+  // 7-Segment Display
+  //===================================================
+  logic [3:0] result_out;
+
+  always_comb begin
+    case (result_out)
+      4'b0000: seg = 7'b1000000;  // Display 0
+      4'b0001: seg = 7'b1111001;  // Display 1
+      4'b0010: seg = 7'b0100100;  // Display 2
+      4'b0011: seg = 7'b0110000;  // Display 3
+      4'b0100: seg = 7'b0011001;  // Display 4
+      4'b0101: seg = 7'b0010010;  // Display 5
+      4'b0110: seg = 7'b0000010;  // Display 6
+      4'b0111: seg = 7'b1111000;  // Display 7
+      4'b1000: seg = 7'b0000000;  // Display 8
+      4'b1001: seg = 7'b0010000;  // Display 9
+      default: seg = 7'b1111111;  // Blank
+    endcase
+  end
+
+  //===================================================
+  // FSM Controller
+  //===================================================
+  logic spi_rx_enable;
+  logic buffer_full, buffer_empty, clear_internal;
+  logic [3:0] fsm_state;
+  logic [6:0] buffer_write_addr;
+  logic [7:0] buffer_write_data;
+  logic       bnn_enable;
+  logic       buffer_write_request;
+  logic       buffer_write_ready;
+
   controller_fsm u_controller_fsm (
-      .clk  (clk),
+      .clk(clk),
       .rst_n(rst_n),
+      .main_cycle_cnt(main_cycle_cnt),
+      .sclk_cycle_cnt(sclk_cycle_cnt),
 
-      // Inputs from submodules / external
-      .CS(CS),
-      .byte_valid(byte_valid),
-      .byte_ready(byte_ready),
-      .spi_error(spi_error),
-      .buffer_full(buffer_full),
+      // SPI
+      .spi_rx_data(spi_rx_data),
+      .spi_byte_valid(spi_byte_valid),
+      .byte_taken(byte_taken),
+      .rx_enable(spi_rx_enable),
+
+      // Commands
+      .status_code_reg(status_code_reg),
+      .clear(clear_internal),
+
+      // Image Buffer
+      .buffer_full (buffer_full),
       .buffer_empty(buffer_empty),
+
+      .buffer_write_request(buffer_write_request),
+      .buffer_write_ready  (buffer_write_ready),
+
+      .buffer_write_data(buffer_write_data),
+      .buffer_write_addr(buffer_write_addr),
+
+      // BNN Interface
       .result_ready(result_ready),
-
-      // Outputs to control other modules
-      .rx_enable(rx_enable),
-      .tx_enable(tx_enable),
-      .clear_buffer(clear_buffer),
-      .buffer_write_enable(buffer_write_enable),
-
-      // Expose current state for debug
-      .current_state(fsm_current_state)
+      .result_out  (result_out),
+      .bnn_enable  (bnn_enable)
   );
 
-  // ----------------------- Submodule Instantiations -----------------------
+  //===================================================
+  // SPI Peripheral
+  //===================================================
+  logic [7:0] spi_rx_data;
+  logic       spi_byte_valid;
+  logic       byte_taken;
+
   spi_peripheral spi_peripheral_inst (
-      .clk  (clk),
       .rst_n(rst_n),
-      .SCLK (SCLK),
-      .COPI (COPI),
-      .CS   (CS),
-      .CIPO (CIPO),
+      .clk(clk),
+      .main_cycle_cnt(main_cycle_cnt),
+      .sclk_cycle_cnt(sclk_cycle_cnt),
 
-      // Control signals input
-      .byte_ready(byte_ready),  // Byte ready signal
-      .rx_enable (rx_enable),   // Enable for receiving data
-      .tx_enable (tx_enable),   // Enable for transmitting data
+      // SPI Pins
+      .SCLK(SCLK),
+      .COPI(COPI),
+      .spi_cs_n(spi_cs_n),
 
-      // Control signals output
-      .tx_byte   (tx_byte),     // Byte to be transmitted
-      .rx_byte   (rx_byte),     // PI data output
-      .byte_valid(byte_valid),  // valid indicator
-      .spi_error (spi_error)
+      // Data Interface
+      .spi_rx_data(spi_rx_data),
+
+      // Control Signals
+      .rx_enable (spi_rx_enable),
+      .byte_valid(spi_byte_valid),
+      .byte_taken(byte_taken)
   );
 
-  bnn_interface u_bnn_interface (
-      .clk  (clk),
+  //===================================================
+  // Image Buffer
+  //===================================================
+  logic [903:0] image_buffer;
+  logic [  6:0] write_addr;
+
+
+  image_buffer u_image_buffer (
+      .clk(clk),
       .rst_n(rst_n),
+      .main_cycle_cnt(main_cycle_cnt),
+      .sclk_cycle_cnt(sclk_cycle_cnt),
+
+      // inputs
+      .write_request(buffer_write_request),
+      .write_ready  (buffer_write_ready),
+
+      .clear_buffer(clear_internal),
+      .data_in     (buffer_write_data),
+
+      //outputs
+      .buffer_full (buffer_full),
+      .buffer_empty(buffer_empty),
+      .write_addr  (write_addr),
+      .img_out     (image_buffer)
+  );
+
+  //===================================================
+  // BNN Interface 
+  //===================================================
+  bnn_interface u_bnn_interface (
+      .clk(clk),
+      .rst_n(rst_n),
+      .main_cycle_cnt(main_cycle_cnt),
+      .sclk_cycle_cnt(sclk_cycle_cnt),
 
       // Data
-      .img_in(image_flat),  // Use unpacked array
-      .result_out(result_out),  // 8 bits
+      .img_in(image_buffer),  // Packed vector matches declaration
+      .result_out(result_out),  // Match 4-bit width
 
       // Control signals
       .img_buffer_full(buffer_full),
-      .result_ready(result_ready)
+      .result_ready(result_ready),
+      .bnn_enable(bnn_enable),
+      .bnn_clear(clear_internal)
   );
 
-  // -------------- Image Buffer Instantiation --------------
-  image_buffer u_image_buffer (
-      .clk         (clk),
-      .rst_n       (rst_n),
-      .clear_buffer(clear_buffer),
-      .write_addr  (image_write_addr),
-      .data_in     (rx_byte),
-      .full        (buffer_full),
-      .empty       (buffer_empty),
-      .write_enable(buffer_write_enable),
-      .image_flat  (image_flat)
-  );
-
+  // `ifndef SYNTHESIS
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
-      .clk(clk),
+      .clk         (clk),
+      .rst_n       (rst_n),         // <<< added rst_n connection
       .debug_enable(debug_trigger),
 
       // FSM
-      .fsm_state(fsm_current_state),
-      .spi_error(spi_error),
+      .spi_rx_data(spi_rx_data),
+      .spi_byte_valid(spi_byte_valid),
+      .byte_taken(byte_taken),
+      .spi_rx_enable(spi_rx_enable),
+      .status_code_reg(status_code_reg),
+      .clear_internal(clear_internal),
+      .buffer_full(buffer_full),
+      .buffer_empty(buffer_empty),
+      .buffer_write_data(buffer_write_data),
+      .buffer_write_addr(buffer_write_addr),
+      .result_ready(result_ready),
+      .result_out(result_out),
+      .bnn_enable(bnn_enable),
 
       // SPI
-      .spi_byte_valid(byte_valid),
-      .spi_byte_ready(byte_ready),
-      .spi_rx_byte(rx_byte),
-      .spi_tx_byte(tx_byte),
+      .SCLK(SCLK),
+      .COPI(COPI),
+      .spi_cs_n(spi_cs_n),
 
       // Image buffer
-      .buffer_full (buffer_full),
-      .buffer_empty(buffer_empty),
-      .write_addr  (image_write_addr),
+      .clear_buffer(clear_internal),
+      .data_in     (buffer_write_data),
 
       // BNN
-      .bnn_result_ready(result_ready),
-      .bnn_result_out  (result_out)
+      .img_in(image_buffer),
+
+      // Control signals
+      .img_buffer_full(buffer_full),
+      .bnn_clear(clear_internal),
+
+      // Sync
+      .src_clk  (SCLK),
+      .src_pulse(spi_byte_valid),
+      .dst_clk  (clk),
+      .dst_pulse(byte_taken),
+
+      // Cycles
+      .main_cycle_cnt(main_cycle_cnt),
+      .sclk_cycle_cnt(sclk_cycle_cnt)
   );
+  // `endif
 
 endmodule

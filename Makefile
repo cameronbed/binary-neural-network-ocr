@@ -23,12 +23,20 @@ clean:
 # ============== Vivado Targets ==============
 
 # Synthesis and simulation targets
-.PHONY: bitstream flash
 bitstream:
 	@echo "==> Synthesizing and generating bitstream..."
 	$(VIVADO) -mode batch -source scripts/run_vivado.tcl
-
+	
 # Program the Basys3 board
-flash: bitstream
+flash:
 	@echo "==> Programming Basys3 board..."
 	$(VIVADO) -mode batch -source scripts/flash_vivado.tcl
+
+# Show the size of the synthesized bitstream
+size:
+	@echo "==> Checking size of build/bnn_ocr.bit..."
+	@if [ -f build/bnn_ocr.bit ]; then \
+		ls -lh build/bnn_ocr.bit; \
+	else \
+		echo "Bitstream not found. Run 'make bitstream' first."; \
+	fi
