@@ -42,9 +42,8 @@ module bnn_interface (
   //   end
   // endgenerate
 
-  assign img_in_truncated[0] = img_in[903:4];
-  logic [3:0] unused_bits;
-  assign unused_bits = img_in[3:0];
+  logic [899:0] img_in_truncated;
+  assign img_in_truncated = img_in[903:4];
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (

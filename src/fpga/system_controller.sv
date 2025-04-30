@@ -131,7 +131,6 @@ module system_controller (
 
       // BNN Interface
       .result_ready(result_ready),
-      .result_out  (result_out),
       .bnn_enable  (bnn_enable)
   );
 
