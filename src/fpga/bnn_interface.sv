@@ -33,15 +33,6 @@ module bnn_interface (
 
   logic result_ready_internal;
 
-  logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in_truncated[0:CONV1_IC-1];
-
-  // generate
-  //   genvar i;
-  //   for (i = 0; i < CONV1_IC; i++) begin
-  //     assign img_in_truncated[i] = img_in[(i+1)*CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1 -: CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE];
-  //   end
-  // endgenerate
-
   logic [899:0] img_in_truncated;
   assign img_in_truncated = img_in[903:4];
 
