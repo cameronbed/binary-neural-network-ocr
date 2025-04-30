@@ -22,11 +22,11 @@ module system_controller (
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
 
-    output logic heartbeat
+    output logic heartbeat,
 
-`ifndef SYNTHESIS,
+    // `ifndef SYNTHESIS
     input logic debug_trigger
-`endif
+    // `endif
 );
   //===================================================
   // Internal Signals
@@ -57,8 +57,7 @@ module system_controller (
     if (!rst_n) begin
       main_cycle_cnt <= 0;
       sclk_cycle_cnt <= 0;
-    end
-    else begin
+    end else begin
       main_cycle_cnt <= main_cycle_cnt + 1;
       if (SCLK) sclk_cycle_cnt <= sclk_cycle_cnt + 1;
     end
@@ -106,7 +105,7 @@ module system_controller (
   logic       buffer_write_ready;
 
   controller_fsm u_controller_fsm (
-      .clk(clk),
+      .clk  (clk),
       .rst_n(rst_n),
 
       // SPI
@@ -143,7 +142,7 @@ module system_controller (
 
   spi_peripheral spi_peripheral_inst (
       .rst_n(rst_n),
-      .clk(clk),
+      .clk  (clk),
 
       // SPI Pins
       .SCLK(SCLK),
@@ -162,12 +161,12 @@ module system_controller (
   //===================================================
   // Image Buffer
   //===================================================
-  logic [903:0] image_buffer;
-  logic [  6:0] write_addr;
+  logic [7:0] img_out_array[0:112];
+  logic [6:0] write_addr;
 
 
   image_buffer u_image_buffer (
-      .clk(clk),
+      .clk  (clk),
       .rst_n(rst_n),
 
       // inputs
@@ -178,21 +177,21 @@ module system_controller (
       .data_in     (buffer_write_data),
 
       //outputs
-      .buffer_full (buffer_full),
-      .buffer_empty(buffer_empty),
-      .write_addr  (write_addr),
-      .img_out     (image_buffer)
+      .buffer_full  (buffer_full),
+      .buffer_empty (buffer_empty),
+      .write_addr   (write_addr),
+      .img_out_array(img_out_array)
   );
 
   //===================================================
   // BNN Interface 
   //===================================================
   bnn_interface u_bnn_interface (
-      .clk(clk),
+      .clk  (clk),
       .rst_n(rst_n),
 
       // Data
-      .img_in(image_buffer),  // Packed vector matches declaration
+      .img_in_array(img_out_array),  // Packed vector matches declaration
       .result_out(result_out),  // Match 4-bit width
 
       // Control signals
@@ -234,7 +233,7 @@ module system_controller (
       .data_in     (buffer_write_data),
 
       // BNN
-      .img_in(image_buffer),
+      .img_in_array(img_out_array),
 
       // Control signals
       .img_buffer_full(buffer_full),

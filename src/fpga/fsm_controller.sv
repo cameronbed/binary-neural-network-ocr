@@ -97,7 +97,7 @@ module controller_fsm (
   always_comb begin
     byte_taken_comb = 0;  // default
     rx_enable = 0;
-    buffer_write_data = 0;
+    buffer_write_data = spi_rx_data;
     buffer_write_addr = buffer_write_addr_int;
     bnn_enable = 0;
     clear = 0;
@@ -136,7 +136,6 @@ module controller_fsm (
 
           end else if (buffer_write_ready) begin
             buffer_write_request = 1;
-            buffer_write_data = spi_rx_data;
             byte_taken_comb = 1;
 
           end else begin
@@ -154,7 +153,6 @@ module controller_fsm (
           byte_taken_comb = 1;
 
           buffer_write_request = 1;
-          buffer_write_data = spi_rx_data;
         end
       end
 
@@ -171,11 +169,11 @@ module controller_fsm (
             clear = 1;
             byte_taken_comb = 1;
 
-          end else begin
+          end else if (buffer_write_ready) begin
             buffer_write_request = 1;
-            buffer_write_data = spi_rx_data;
             byte_taken_comb = 1;
           end
+
         end
       end
 
@@ -214,10 +212,7 @@ module controller_fsm (
         end
       end
 
-      default: begin
-        next_state = S_IDLE;
-        next_status_code_reg = STATUS_ERROR;
-      end
+      default: next_status_code_reg = STATUS_IDLE;
     endcase
   end
 

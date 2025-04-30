@@ -13,7 +13,7 @@ module image_buffer (
     output logic buffer_full,
     output logic buffer_empty,
 
-    output logic [903:0] img_out
+    output logic [7:0] img_out_array[0:112]
 );
   parameter int IMG_WIDTH = 30;
   parameter int IMG_HEIGHT = 30;
@@ -23,28 +23,19 @@ module image_buffer (
   (* ram_style = "block" *) logic [7:0] image_buffer[0:112];
 
   logic [6:0] write_addr_internal;
-  logic [6:0] next_addr_ff;
+  // logic [6:0] next_addr_ff;
 
   //===================================================
   // Write Logic + next‐addr tracking
   //===================================================
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
+    if (!rst_n || clear_buffer) begin
       write_addr_internal <= 7'd0;
-      next_addr_ff        <= 7'd0;
-      // img_buffer          <= '0;
-    end else if (clear_buffer) begin
-      write_addr_internal <= 7'd0;
-      next_addr_ff        <= 7'd0;
-      // img_buffer          <= '0;
     end else begin
-      // default: don’t advance pointer
-      next_addr_ff <= write_addr_internal;
 
       if (write_request && (write_addr_internal < IMG_BYTE_SIZE)) begin
         image_buffer[write_addr_internal] <= data_in;
         write_addr_internal <= write_addr_internal + 1;
-        next_addr_ff <= write_addr_internal + 1;
       end
     end
   end
@@ -54,8 +45,8 @@ module image_buffer (
   //===================================================
   genvar i;
   generate
-    for (i = 0; i < 113; i++) begin : PACK_IMAGE
-      assign img_out[i*8+:8] = image_buffer[i];
+    for (i = 0; i < 113; i++) begin : EXPAND_IMG
+      assign img_out_array[i] = image_buffer[i];
     end
   endgenerate
 
@@ -63,7 +54,7 @@ module image_buffer (
   // Status Flag and outputs
   //===================================================
   assign write_ready  = (write_addr_internal < IMG_BYTE_SIZE);
-  assign buffer_full  = (next_addr_ff >= IMG_BYTE_SIZE);
+  assign buffer_full  = (write_addr_internal >= IMG_BYTE_SIZE);
   assign buffer_empty = (write_addr_internal == 0);
   assign write_addr   = write_addr_internal;
   // assign img_out = img_buffer;

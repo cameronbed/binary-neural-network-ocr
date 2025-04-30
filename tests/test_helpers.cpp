@@ -48,7 +48,7 @@ void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
 
     if (VERBOSE)
     {
-        debug(dut);
+        // debug(dut);
         std::cout << "[SPI] Sending byte: 0x" << std::hex << (int)byte_val << "\n";
     }
 
@@ -63,17 +63,20 @@ void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
         sclk_rise(dut); // Rising edge
         sclk_fall(dut); // Falling edge
 
-        if (VERBOSE)
-            debug(dut);
+        // if (VERBOSE)
+        //     std::cout << "[VERBOSE] Current state of DUT: "
+        //               << "SCLK=" << (int)dut->SCLK << ", "
+        //               << "COPI=" << (int)dut->COPI << ", "
+        //               << "status_code_reg=" << (int)dut->status_code_reg << "\n";
     }
 
     dut->spi_cs_n = 1; // End transaction
     dut->eval();
-    tick_main_clk(dut, 10); // Wait after CS_N goes high
+    tick_main_clk(dut, 11); // Wait after CS_N goes high
 
     if (VERBOSE)
     {
-        debug(dut);
+        // debug(dut);
         std::cout << "[SPI] Byte sent: 0x" << std::hex << (int)byte_val << "\n";
     }
 }

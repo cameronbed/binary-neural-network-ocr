@@ -1,4 +1,4 @@
-`ifndef SYNTHESIS
+//`ifndef SYNTHESIS
 
 `timescale 1ns / 1ps
 module debug_module (
@@ -30,8 +30,8 @@ module debug_module (
     input logic bnn_enable,
 
     // BNN
-    input logic [903:0] img_in,
-    input logic [  3:0] result_out,
+    input logic [7:0] img_in_array[0:112],
+    input logic [3:0] result_out,
 
     // Control signals
     input logic img_buffer_full,
@@ -49,6 +49,14 @@ module debug_module (
 );
 
   logic [3:0] remaining_bits;  // Declare outside the procedural block
+
+  logic nonzero_image;
+  always_comb begin
+    nonzero_image = 0;
+    for (int i = 0; i < 113; i++) begin
+      if (img_in_array[i] != 8'd0) nonzero_image = 1;
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -93,20 +101,20 @@ module debug_module (
       $display("[IMAGE BUFFER][%0d] Clear Buffer: %b, Data In: %h", main_cycle_cnt, clear_buffer,
                data_in);
 
-      if (|img_in) begin  // Check if any bit in img_in is set
+      if (nonzero_image) begin
         $display("[IMAGE BUFFER][%0d] Full Binary Array:", main_cycle_cnt);
         for (int i = 0; i < 904; i++) begin
           if (i % 30 == 0) begin
-            // Start a new line every 30 bits for readability
-            if (i > 0) $display("");  // Print a newline after each row
+            if (i > 0) $display("");
             $write("[%0d-%0d]: ", i, i + 29);
           end
-          $write("%b", img_in[i]);
+          $write("%b", img_in_array[i/8][7-(i%8)]);
         end
-        $display("");  // Final newline after printing all bits
+        $display("");  // Final newline
       end else begin
         $display("[IMAGE BUFFER][%0d] Binary Array is empty.", main_cycle_cnt);
       end
+
 
       // // BNN Section
       $display("[BNN][%0d] Image Buffer Full: %b, BNN Clear: %b", main_cycle_cnt, img_buffer_full,
@@ -132,4 +140,4 @@ module debug_module (
 
 endmodule
 
-`endif
+//`endif

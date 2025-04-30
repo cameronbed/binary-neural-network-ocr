@@ -10,8 +10,8 @@ module bnn_interface (
     input logic rst_n,
 
     // Data
-    input  logic [903:0] img_in,
-    output logic [  3:0] result_out,
+    input  logic [7:0] img_in_array[0:112],
+    output logic [3:0] result_out,
 
     // Control
     input  logic img_buffer_full,
@@ -34,12 +34,19 @@ module bnn_interface (
   logic result_ready_internal;
 
   logic [899:0] img_in_truncated;
-  assign img_in_truncated = img_in[903:4];
+  generate
+    genvar i;
+    for (i = 0; i < 112; i++) begin : PACK_IMG
+      assign img_in_truncated[i*8+:8] = img_in_array[i];
+    end
+  endgenerate
+
+  assign img_in_truncated[899:896] = img_in_array[112][7:4];  // Discard lower 4 bits
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
       .clk(clk),
-      .conv1_img_in(img_in_truncated),
+      .conv1_img_in('{img_in_truncated}),
       .data_in_ready(bnn_enable),
       .result(result_out),
       .data_out_ready(result_ready_internal)

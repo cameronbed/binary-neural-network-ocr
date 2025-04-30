@@ -108,6 +108,43 @@ void send_digit(Vsystem_controller *dut, const std::vector<std::string> &digit, 
     debug(dut);
 }
 
+void send_pattern(Vsystem_controller *dut, const std::vector<uint8_t> &pattern)
+{
+    std::cout << "[TB IMG] Sending pattern via SPI\n";
+
+    // CLEAR buffer and wait idle
+    spi_send_byte(dut, CMD_CLEAR);
+    while (dut->status_code_reg == STATUS_BNN_BUSY)
+        tick_main_clk(dut, 1);
+    check_fsm_state(dut, STATUS_IDLE, "STATUS_IDLE");
+
+    // ASK to send image
+    spi_send_byte(dut, CMD_IMG_SEND_REQUEST);
+    tick_main_clk(dut, 5);
+    check_fsm_state(dut, STATUS_RX_IMG_RDY, "STATUS_RX_IMG_RDY");
+
+    // Stream the pattern bytes
+    for (uint8_t byte : pattern)
+    {
+        spi_send_byte(dut, byte);
+        tick_main_clk(dut, 1);
+    }
+
+    // if we sent a full buffer, expect BNN_BUSY, otherwise RX_IMG
+    if (pattern.size() >= 113)
+    {
+        check_fsm_state(dut, STATUS_BNN_BUSY, "STATUS_BNN_BUSY");
+        while (dut->status_code_reg == STATUS_BNN_BUSY)
+            tick_main_clk(dut, 1);
+    }
+    else
+    {
+        check_fsm_state(dut, STATUS_RX_IMG, "STATUS_RX_IMG");
+    }
+
+    std::cout << "[TB IMG] Pattern sent successfully\n";
+}
+
 void test_image_buffer(Vsystem_controller *dut)
 {
     std::cout << "\n[TB IMG] test_image_buffer [Clock cycles: " << main_clk_ticks << "]\n";
@@ -417,12 +454,26 @@ void test_image_buffer(Vsystem_controller *dut)
         digit_0, digit_1, digit_2, digit_3,
         digit_4, digit_5, digit_6, digit_8, digit_9};
 
+    // Test with a repeating pattern
+    std::cout << "[TB IMG] Testing with repeating pattern...\n";
+    std::vector<uint8_t> repeating_pattern = {0b10000000, 0b11000000, 0b11100000, 0b11110000, 0b11111000, 0b11111100, 0b11111110, 0b11111111};
+    send_pattern(dut, repeating_pattern);
+
+    std::cout << "[TB IMG] Testing with increasing pattern...\n";
+    std::vector<uint8_t> increasing_pattern;
+    for (uint8_t i = 0; i < 256; i += 16) // Example: Increment by 16
+    {
+        increasing_pattern.push_back(i);
+    }
+    std::cout << "[TB IMG] Back to send_pattern\n";
+    send_pattern(dut, increasing_pattern);
+
     // for (size_t idx = 0; idx < all_digits.size(); ++idx)
     // {
     //     send_digit(dut, all_digits[idx], idx);
     // }
 
-    send_digit(dut, digit_8, 0); // Test digit 0 again
+    // send_digit(dut, digit_8, 0); // Test digit 0 again
 
     std::cout << "[TB IMG] ✅ Image buffer and FSM behavior passed\n";
 }
