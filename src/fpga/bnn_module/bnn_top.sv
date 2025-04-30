@@ -16,16 +16,16 @@ module bnn_top #(
     parameter int FC_IC = POOL2_IMG_OUT_SIZE * POOL2_IMG_OUT_SIZE * CONV2_OC,
     parameter int OUTPUT_BIT = $clog2(FC_OC + 1)  // num of bits to enumerate each class
 ) (
-    input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in[0:CONV1_IC-1],
+    input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in [0:CONV1_IC-1],
     input logic clk,
     input logic data_in_ready,
     output logic [OUTPUT_BIT-1:0] result,
     output logic data_out_ready
 );
 
-  logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in[0:CONV1_IC-1] = {
-    900'h7c000003fc00001e70000070000001800000070000001ff000001fe0000001800000060000081800003ff00000ffc0000000000000000000000000000000000000000000000000000000000000000000000
-  };
+  // logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in[0:CONV1_IC-1] = {
+  //   900'h7c000003fc00001e70000070000001800000070000001ff000001fe0000001800000060000081800003ff00000ffc0000000000000000000000000000000000000000000000000000000000000000000000
+  // };
   // assign conv1_img_in = img_in;
   logic [CONV1_IC*9-1:0] conv1_weights[0:CONV1_OC-1] = {
     9'hb5, 9'h180, 9'h1ef, 9'h3c, 9'h108, 9'hdb, 9'hdf, 9'h120, 9'h1e9, 9'h5f
