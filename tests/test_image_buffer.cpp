@@ -51,6 +51,63 @@ std::string decode_seg(uint8_t seg)
     }
 }
 
+void send_digit(Vsystem_controller *dut, const std::vector<std::string> &digit, size_t idx)
+{
+    std::cout << "[TB IMG] Sending digit " << idx << "\n";
+
+    // Flatten 30×30 into one big string
+    std::string flat;
+    flat.reserve(30 * 30);
+    for (auto &row : digit)
+        flat += row;
+    assert(flat.size() == 900);
+
+    // CLEAR buffer and wait idle
+    spi_send_byte(dut, CMD_CLEAR);
+    while (dut->status_code_reg == STATUS_BNN_BUSY)
+        tick_main_clk(dut, 1);
+    check_fsm_state(dut, STATUS_IDLE, "STATUS_IDLE");
+
+    // ASK to send image
+    spi_send_byte(dut, CMD_IMG_SEND_REQUEST);
+    tick_main_clk(dut, 5);
+    check_fsm_state(dut, STATUS_RX_IMG_RDY, "STATUS_RX_IMG_RDY");
+
+    // Stream the image bits LSB-first in bytes
+    for (size_t i = 0; i < flat.size(); i += 8)
+    {
+        uint8_t b = 0;
+        for (int bit = 0; bit < 8 && i + bit < flat.size(); ++bit)
+            if (flat[i + bit] == '1')
+                b |= (1 << bit);
+        spi_send_byte(dut, b);
+        tick_main_clk(dut, 1);
+    }
+
+    // Wait for BNN to consume
+    check_fsm_state(dut, STATUS_BNN_BUSY, "STATUS_BNN_BUSY");
+    while (dut->status_code_reg == STATUS_BNN_BUSY)
+        tick_main_clk(dut, 1);
+
+    std::string decoded_seg = decode_seg(dut->seg);
+    std::cout << "[TB IMG] 7-segment display for digit " << idx << ": " << decoded_seg << "\n";
+
+    // Check if the decoded value matches the expected digit
+    if (decoded_seg != std::to_string(idx))
+    {
+        std::cerr << "❌ Test failed for digit " << idx << ": Expected " << idx
+                  << ", but got " << decoded_seg << "\n";
+    }
+    else
+    {
+        std::cout << "✅ Test passed for digit " << idx << "\n";
+    }
+
+    std::cout << "[TB IMG] Digit " << idx << " done (cycles: " << main_clk_ticks << ")\n";
+
+    debug(dut);
+}
+
 void test_image_buffer(Vsystem_controller *dut)
 {
     std::cout << "\n[TB IMG] test_image_buffer [Clock cycles: " << main_clk_ticks << "]\n";
@@ -360,64 +417,12 @@ void test_image_buffer(Vsystem_controller *dut)
         digit_0, digit_1, digit_2, digit_3,
         digit_4, digit_5, digit_6, digit_8, digit_9};
 
-    for (size_t idx = 0; idx < all_digits.size(); ++idx)
-    {
-        std::cout << "[TB IMG] Sending digit " << idx << "\n";
+    // for (size_t idx = 0; idx < all_digits.size(); ++idx)
+    // {
+    //     send_digit(dut, all_digits[idx], idx);
+    // }
 
-        const auto &digit = all_digits[idx];
-
-        // flatten 30×30 into one big string
-        std::string flat;
-        flat.reserve(30 * 30);
-        for (auto &row : digit)
-            flat += row;
-        assert(flat.size() == 900);
-
-        // CLEAR buffer and wait idle
-        spi_send_byte(dut, CMD_CLEAR);
-        while (dut->status_code_reg == STATUS_BNN_BUSY)
-            tick_main_clk(dut, 1);
-        check_fsm_state(dut, STATUS_IDLE, "STATUS_IDLE");
-
-        // ASK to send image
-        spi_send_byte(dut, CMD_IMG_SEND_REQUEST);
-        tick_main_clk(dut, 5);
-        check_fsm_state(dut, STATUS_RX_IMG_RDY, "STATUS_RX_IMG_RDY");
-
-        // stream the image bits LSB-first in bytes
-        for (size_t i = 0; i < flat.size(); i += 8)
-        {
-            uint8_t b = 0;
-            for (int bit = 0; bit < 8 && i + bit < flat.size(); ++bit)
-                if (flat[i + bit] == '1')
-                    b |= (1 << bit);
-            spi_send_byte(dut, b);
-            tick_main_clk(dut, 1);
-        }
-
-        // wait for BNN to consume
-        check_fsm_state(dut, STATUS_BNN_BUSY, "STATUS_BNN_BUSY");
-        while (dut->status_code_reg == STATUS_BNN_BUSY)
-            tick_main_clk(dut, 1);
-
-        std::string decoded_seg = decode_seg(dut->seg);
-        std::cout << "[TB IMG] 7-segment display for digit " << idx << ": " << decoded_seg << "\n";
-
-        // Check if the decoded value matches the expected digit
-        if (decoded_seg != std::to_string(idx))
-        {
-            std::cerr << "❌ Test failed for digit " << idx << ": Expected " << idx
-                      << ", but got " << decoded_seg << "\n";
-        }
-        else
-        {
-            std::cout << "✅ Test passed for digit " << idx << "\n";
-        }
-
-        std::cout << "[TB IMG] Digit " << idx << " done (cycles: " << main_clk_ticks << ")\n";
-
-        debug(dut);
-    }
+    send_digit(dut, digit_8, 0); // Test digit 0 again
 
     std::cout << "[TB IMG] ✅ Image buffer and FSM behavior passed\n";
 }

@@ -1,5 +1,7 @@
-`include "MaxPoolCore.sv"
+`ifndef SYNTHESIS
 
+`include "MaxPoolCore.sv"
+`endif
 module MaxPool2d #(
     parameter int IMG_IN_SIZE = 28,
     parameter int IMG_OUT_SIZE = IMG_IN_SIZE / 2,

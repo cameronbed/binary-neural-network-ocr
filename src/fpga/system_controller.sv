@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
-//`ifdef SYNTHESIS
+`ifndef SYNTHESIS
 `include "spi_peripheral.sv"
 `include "bnn_interface.sv"
 `include "debug_module.sv"
 `include "fsm_controller.sv"
 `include "image_buffer.sv"
-//`endif
+`endif
 
 module system_controller (
     input logic clk,
@@ -22,11 +22,11 @@ module system_controller (
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
 
-    output logic heartbeat,
+    output logic heartbeat
 
-    //`ifndef SYNTHESIS
+`ifndef SYNTHESIS,
     input logic debug_trigger
-    //`endif
+`endif
 );
   //===================================================
   // Internal Signals
@@ -200,7 +200,7 @@ module system_controller (
       .bnn_clear(clear_internal)
   );
 
-  // `ifndef SYNTHESIS
+`ifndef SYNTHESIS
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
       .clk         (clk),
@@ -248,6 +248,6 @@ module system_controller (
       .main_cycle_cnt(main_cycle_cnt),
       .sclk_cycle_cnt(sclk_cycle_cnt)
   );
-  // `endif
+`endif
 
 endmodule
