@@ -35,7 +35,7 @@ module ConvCore #(
         always_comb begin : adder_block
           popcount = 8'b0;
           for (int i = 0; i < IC * 9; i = i + 1) begin : loop_add
-            popcount = popcount + ((patch[i] == weights[i]) ? 8'h1 : -8'h1);
+            popcount = popcount + ((patch[i] == weights[i]) ? 8'sh01 : 8'shFF);
           end
         end
         // assign img_out[row*IMG_OUT_SIZE+col] = ($signed({popcount, 8'b0}) >= threshold)?1'b1:1'b0;

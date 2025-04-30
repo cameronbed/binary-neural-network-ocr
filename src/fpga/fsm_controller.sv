@@ -3,8 +3,6 @@
 module controller_fsm (
     input logic clk,
     input logic rst_n,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
 
     // SPI interface
     input  logic [7:0] spi_rx_data,

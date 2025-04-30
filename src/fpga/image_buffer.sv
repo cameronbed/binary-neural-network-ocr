@@ -2,8 +2,6 @@
 module image_buffer (
     input logic clk,
     input logic rst_n,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
 
     input logic clear_buffer,
     input logic [7:0] data_in,

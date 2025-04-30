@@ -8,8 +8,6 @@
 module bnn_interface (
     input logic clk,
     input logic rst_n,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
 
     // Data
     input  logic [903:0] img_in,
@@ -45,6 +43,8 @@ module bnn_interface (
   // endgenerate
 
   assign img_in_truncated[0] = img_in[903:4];
+  logic [3:0] unused_bits;
+  assign unused_bits = img_in[3:0];
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
