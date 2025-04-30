@@ -78,8 +78,8 @@ module debug_module (
       //     main_cycle_cnt, buffer_full, buffer_empty, buffer_write_data,
       //     buffer_write_addr);
 
-      // $display("[FSM][%0d] Result Ready: %b, Result Out: %h", main_cycle_cnt, result_ready,
-      //          result_out);
+      $display("[FSM][%0d] Result Ready: %b, Result Out: %h", main_cycle_cnt, result_ready,
+               result_out);
 
       // SPI Section
       $display("[SPI][%0d] SCLK: %b, COPI: %b, SPI CS_N: %b", sclk_cycle_cnt, SCLK, COPI, spi_cs_n);

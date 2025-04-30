@@ -21,6 +21,7 @@ module system_controller (
     // System Outputs
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
+    output logic [3:0] result_out_exposed,
 
     output logic heartbeat,
 
@@ -81,6 +82,8 @@ module system_controller (
       default: seg = 7'b1111111;  // Blank
     endcase
   end
+
+  assign result_out_exposed = result_out;
 
   //===================================================
   // FSM Controller

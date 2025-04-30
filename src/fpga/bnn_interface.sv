@@ -5,8 +5,6 @@
 module bnn_interface (
     input logic clk,
     input logic rst_n,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
 
     // Data
     input  logic [903:0] img_in,
@@ -34,7 +32,7 @@ module bnn_interface (
 
   logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in_truncated[0:CONV1_IC-1];
 
-  assign img_in_truncated[0] = img_in[899:0];
+  assign img_in_truncated[0] = img_in[903:4];
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
@@ -50,15 +48,25 @@ module bnn_interface (
     next_state = state;
     case (state)
       IDLE: begin
-        if (img_buffer_full && bnn_enable) next_state = INFERENCE;
+        if (img_buffer_full && bnn_enable) begin
+          $display("[BNN_INTERFACE] Transitioning to INFERENCE state.");
+          next_state = INFERENCE;
+        end
       end
 
       INFERENCE: begin
-        if (result_ready_internal == 1) next_state = DONE;
+        if (result_ready_internal == 1) begin
+          $display("[BNN_INTERFACE] Transitioning to DONE state. Result ready internal: %b",
+                   result_ready_internal);
+          next_state = DONE;
+        end
       end
 
       DONE: begin
-        if (bnn_clear) next_state = IDLE;
+        if (bnn_clear) begin
+          $display("[BNN_INTERFACE] Transitioning to IDLE state. Clear signal received.");
+          next_state = IDLE;
+        end
       end
 
       default: next_state = IDLE;
@@ -68,6 +76,7 @@ module bnn_interface (
   // Main sequential logic
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
+      $display("[BNN_INTERFACE] Reset asserted. Returning to IDLE state.");
       result_ready <= 1'b0;
       state <= IDLE;
 
@@ -77,19 +86,27 @@ module bnn_interface (
       case (state)
         IDLE: begin
           result_ready <= 1'b0;
+          $display("[BNN_INTERFACE] In IDLE state. img_buffer_full: %b, bnn_enable: %b",
+                   img_buffer_full, bnn_enable);
         end
 
         INFERENCE: begin
           if (result_ready_internal == 1) begin
             result_ready <= 1'd1;
+            $display("[BNN_INTERFACE] Inference complete. Result ready: %b", result_ready);
           end
         end
 
         DONE: begin
           if (bnn_clear) begin
             result_ready <= 1'b0;  // clear result ready
+            $display("[BNN_INTERFACE] Clearing result_ready signal.");
           end else begin
             result_ready <= 1'b1;  // hold ready until clear
+            $display(
+                "[BNN_INTERFACE] Holding result_ready signal. Result (binary): %b, Result (decimal): %d",
+                result_out, result_out);
+            $display("[BNN_INTERFACE] Inference done. Result: %b", result_out);
           end
         end
 

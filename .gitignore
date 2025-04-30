@@ -93,6 +93,7 @@ vivado.hw/
 vivado.ip_user_files/
 vivado.runs/
 vivado.sim/
+obj_dir/
 
 ###### for Xilinx Vivado|ISE
 .Xil/

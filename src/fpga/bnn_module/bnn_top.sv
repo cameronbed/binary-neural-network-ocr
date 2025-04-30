@@ -3012,6 +3012,13 @@ module bnn_top #(
       .data_out_ready(data_out_ready)
   );
 
+  always_ff @(posedge clk) begin
+    if (fc_data_ready) begin
+      $display("[BNN_TOP] FC output: %p", fc_out);
+      $display("[BNN_TOP] Computed result (binary): %b, (decimal): %d", result, result);
+    end
+  end
+
   // wire _unused_ok = &{result};
 
 endmodule

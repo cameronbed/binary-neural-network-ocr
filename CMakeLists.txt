@@ -11,9 +11,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add all RTL source files
 set(RTL_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/fpga/system_controller.sv
+    # ${CMAKE_SOURCE_DIR}/src/fpga/system_controller.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/spi_peripheral.sv
-    # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_interface.sv
+    ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/bnn_top.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/debug_module.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/fsm_controller.sv
     # ${CMAKE_SOURCE_DIR}/src/fpga/top.sv
@@ -28,13 +28,15 @@ set(RTL_SOURCES
 )
 
 # Set up paths
-set(TEST_NAME main_test)
+# set(TEST_NAME main_test)
+set(TEST_NAME bnn_test)
 set(TESTBENCH_CPP 
-    ${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_helpers.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_image_buffer.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_spi.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_fsm.cpp
+    # ${CMAKE_SOURCE_DIR}/tests/${TEST_NAME}.cpp
+    # ${CMAKE_SOURCE_DIR}/tests/test_helpers.cpp
+    # ${CMAKE_SOURCE_DIR}/tests/test_image_buffer.cpp
+    # ${CMAKE_SOURCE_DIR}/tests/test_spi.cpp
+    # ${CMAKE_SOURCE_DIR}/tests/test_fsm.cpp
+    ${CMAKE_SOURCE_DIR}/tests/bnn_test.cpp
 )
 set(OBJ_DIR ${CMAKE_BINARY_DIR}/obj_dir)
 set(EXECUTABLE ${CMAKE_BINARY_DIR}/${TEST_NAME})
@@ -49,7 +51,8 @@ add_custom_command(
         -j 0
         --trace
         --timing
-        --top-module system_controller
+        # --top-module system_controller
+        --top-module bnn_interface_top
         -I${CMAKE_SOURCE_DIR}/src/fpga
         -I${CMAKE_SOURCE_DIR}/src/fpga/bnn_module
         --Mdir ${OBJ_DIR}
