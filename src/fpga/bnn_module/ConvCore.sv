@@ -22,7 +22,23 @@ module ConvCore#(
 );
 
     logic signed [7:0] popcount;
-    integer cur_ic, row, col;
+    integer cur_ic, row, col, adder_count;
+
+    logic signed [7:0] patch_val;
+    always_comb begin
+    case (adder_count)
+        0: patch_val = (img_in[cur_ic][row*IMG_IN_SIZE+col] == weights[cur_ic*9 + 0]) ? 8'sh01 : 8'shFF;
+        1: patch_val = (img_in[cur_ic][row*IMG_IN_SIZE+col+1] == weights[cur_ic*9 + 1]) ? 8'sh01 : 8'shFF;
+        2: patch_val = (img_in[cur_ic][row*IMG_IN_SIZE+col+2] == weights[cur_ic*9+2])?8'sh01 : 8'shFF;
+        3: patch_val = (img_in[cur_ic][(row+1)*IMG_IN_SIZE+col] == weights[cur_ic*9+3])?8'sh01 : 8'shFF;
+        4: patch_val = (img_in[cur_ic][(row+1)*IMG_IN_SIZE+col+1] == weights[cur_ic*9+4])?8'sh01 : 8'shFF;
+        5: patch_val = (img_in[cur_ic][(row+1)*IMG_IN_SIZE+col+2] == weights[cur_ic*9+5])?8'sh01 : 8'shFF;
+        6: patch_val = (img_in[cur_ic][(row+2)*IMG_IN_SIZE+col] == weights[cur_ic*9+6])?8'sh01 : 8'shFF;
+        7: patch_val = (img_in[cur_ic][(row+2)*IMG_IN_SIZE+col+1] == weights[cur_ic*9+7])?8'sh01 : 8'shFF;
+        8: patch_val = (img_in[cur_ic][(row+2)*IMG_IN_SIZE+col+2] == weights[cur_ic*9 + 8]) ? 8'sh01 : 8'shFF;
+        default:    patch_val = 0;
+    endcase
+    end
 
     always_ff @(posedge clk) begin
         if (!data_in_ready) begin
@@ -32,41 +48,39 @@ module ConvCore#(
             row <= 0;
             col <= 0;
             popcount <= 0;
+            adder_count <= 0;
         end
         else if (data_out_ready) begin 
             data_out_ready <= 0;
         end
         else begin
-            if (cur_ic == IC) begin
-                cur_ic <= 0;
-                img_out[row*IMG_OUT_SIZE+col] <= (popcount[7]?1'b0:1'b1);
-                popcount <= 0;
-                if (col == IMG_OUT_SIZE-1) begin
-                    col <= 0;
-                    if (row == IMG_OUT_SIZE-1) begin
-                        row <= 0;
-                        data_out_ready <= 1;
+            if (adder_count == 9) begin
+                adder_count <= 0;
+                if (cur_ic == IC-1) begin
+                    cur_ic <= 0;
+                    img_out[row*IMG_OUT_SIZE+col] <= (popcount[7]?1'b0:1'b1);
+                    popcount <= 0;
+                    if (col == IMG_OUT_SIZE-1) begin
+                        col <= 0;
+                        if (row == IMG_OUT_SIZE-1) begin
+                            row <= 0;
+                            data_out_ready <= 1;
+                        end
+                        else begin
+                            row <= row + 1;
+                        end
                     end
                     else begin
-                        row <= row + 1;
+                        col <= col + 1;
                     end
                 end
                 else begin
-                    col <= col + 1;
+                    cur_ic <= cur_ic + 1;
                 end
             end
             else begin
-                popcount <= popcount + 
-                        ((img_in[cur_ic][row*IMG_IN_SIZE+col] == weights[cur_ic*9+0])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][row*IMG_IN_SIZE+col+1] == weights[cur_ic*9+1])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][row*IMG_IN_SIZE+col+2] == weights[cur_ic*9+2])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][(row+1)*IMG_IN_SIZE+col] == weights[cur_ic*9+3])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][(row+1)*IMG_IN_SIZE+col+1] == weights[cur_ic*9+4])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][(row+1)*IMG_IN_SIZE+col+2] == weights[cur_ic*9+5])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][(row+2)*IMG_IN_SIZE+col] == weights[cur_ic*9+6])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][(row+2)*IMG_IN_SIZE+col+1] == weights[cur_ic*9+7])?8'sh01 : 8'shFF) + 
-                        ((img_in[cur_ic][(row+2)*IMG_IN_SIZE+col+2] == weights[cur_ic*9+8])?8'sh01 : 8'shFF);
-                cur_ic <= cur_ic + 1;
+                popcount <= popcount + patch_val;
+                adder_count <= adder_count + 1;
             end
         end
     end
