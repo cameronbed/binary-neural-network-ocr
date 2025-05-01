@@ -1,3 +1,6 @@
+`ifndef BNN_TOP_SV
+`define BNN_TOP_SV
+
 `ifndef SYNTHESIS
 `include "Conv2d_MaxPool2d.sv"
 `include "FC.sv"
@@ -88,7 +91,7 @@ module bnn_top #(
   );
 
   Comparator #(
-      .IC(FC_OC),
+      .IC(FC_OC)
   ) compare (
       .clk(clk),
       .data_in_ready(fc_data_ready),
@@ -100,3 +103,5 @@ module bnn_top #(
   // wire _unused_ok = &{result};
 
 endmodule
+
+`endif
