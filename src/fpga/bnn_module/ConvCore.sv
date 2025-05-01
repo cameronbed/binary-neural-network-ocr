@@ -1,3 +1,5 @@
+`ifndef CONVCORE_SV
+`define CONVCORE_SV
 /*
     binary convolutional module, accepts binary input, 
     performs xnor with float32 weights
@@ -44,3 +46,5 @@ module ConvCore #(
     end
   endgenerate
 endmodule
+
+`endif
