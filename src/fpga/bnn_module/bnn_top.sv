@@ -47,6 +47,7 @@ module bnn_top #(
     // logic pool2_data_ready;
     logic fc_data_ready;
 
+
   Conv2d_MaxPool2d #(
       .IC(CONV1_IC),
       .OC(CONV1_OC),
