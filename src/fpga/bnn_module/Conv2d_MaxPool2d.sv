@@ -1,12 +1,8 @@
 `ifndef CONV2D_MAXPOOL2D_SV
 `define CONV2D_MAXPOOL2D_SV
 
-`timescale 1ns / 1ps
-
-`ifndef SYNTHESIS
 `include "ConvCore.sv"
 `include "MaxPoolCore.sv"
-`endif
 
 module Conv2d_MaxPool2d #(
     parameter int IC = 4,
@@ -59,19 +55,7 @@ module Conv2d_MaxPool2d #(
   ConvCore #(
       .IC(IC),
       .IMG_IN_SIZE(CONV_IMG_IN_SIZE)
-  ) core1 (
-      .clk(clk),
-      .data_in_ready(core_data_in_ready),
-      .img_in(img_in),
-      .weights(core_weight),
-      .img_out(core_img_out),
-      .data_out_ready(core_data_out_ready)
-  );
-
-  ConvCore #(
-      .IC(IC),
-      .IMG_IN_SIZE(CONV_IMG_IN_SIZE)
-  ) core2 (
+  ) core (
       .clk(clk),
       .data_in_ready(core_data_in_ready),
       .img_in(img_in),
@@ -88,5 +72,3 @@ module Conv2d_MaxPool2d #(
   );
 
 endmodule
-
-`endif
