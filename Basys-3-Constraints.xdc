@@ -5,7 +5,6 @@
 
 ## Clock signal
 set_property -dict { PACKAGE_PIN W5   IOSTANDARD LVCMOS33 } [get_ports clk]
-create_clock -add -name sys_clk_pin -period 10.00 -waveform {0 5} [get_ports clk]
 
 
 ## Switches
@@ -79,3 +78,28 @@ set_property CFGBVS VCCO [current_design]
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
 set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
 set_property CONFIG_MODE SPIx4 [current_design]
+
+## --------------------------
+## Timing Constraints Section
+## --------------------------
+
+# Reference clock (your FPGA clock)
+set clk_freq 100.0
+create_clock -name sys_clk -period [expr 1000.0 / $clk_freq] [get_ports clk]
+
+# SPI clock period (1 MHz = 1000 ns period)
+set spi_clk_period 1000.0
+
+# INPUT DELAYS — assume data arrives in middle of SPI clock cycle
+set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports COPI]
+set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports SCLK]
+set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports spi_cs_n]
+
+# Optional: for async resets
+set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_pin]
+set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_sw_input]
+
+# OUTPUT DELAYS — assume outputs are checked 10ns after clock edge
+set_output_delay -clock [get_clocks sys_clk] 10 [get_ports seg[*]]
+set_output_delay -clock [get_clocks sys_clk] 10 [get_ports status_code_reg[*]]
+set_output_delay -clock [get_clocks sys_clk] 10 [get_ports heartbeat]

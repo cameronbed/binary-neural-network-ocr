@@ -36,7 +36,7 @@ module system_controller (
   logic send_image;
   logic status_ready;
 
-  assign rst_n = rst_n_pin || sw_sync_1;
+  assign rst_n = rst_n_pin;
 
   // -------------- Debounch the switch ---------------------
   logic sw_sync_0, sw_sync_1;

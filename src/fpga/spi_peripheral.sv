@@ -4,7 +4,6 @@ module spi_peripheral (
     input logic rst_n,
     input logic clk,
 
-
     // SPI pins
     input logic SCLK,
     input logic COPI,
@@ -63,7 +62,7 @@ module spi_peripheral (
   // Edge Detection for SCLK
   //===================================================
   wire sclk_rising = (SCLK == 1'b1 && sclk_last == 1'b0);
-  wire sclk_falling = (SCLK == 1'b0 && sclk_last == 1'b1);
+  //wire sclk_falling = (SCLK == 1'b0 && sclk_last == 1'b1);
 
   //=========================================
   // State Transition
