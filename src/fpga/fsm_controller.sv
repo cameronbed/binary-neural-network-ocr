@@ -3,8 +3,6 @@
 module controller_fsm (
     input logic clk,
     input logic rst_n,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
 
     // SPI interface
     input  logic [7:0] spi_rx_data,
@@ -27,9 +25,8 @@ module controller_fsm (
     output logic [6:0] buffer_write_addr,
 
     // BNN interface
-    input  logic       result_ready,
-    input  logic [3:0] result_out,
-    output logic       bnn_enable
+    input  logic result_ready,
+    output logic bnn_enable
 );
   parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
 

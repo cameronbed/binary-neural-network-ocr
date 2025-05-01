@@ -1,4 +1,6 @@
+`ifndef SYNTHESIS
 `include "ConvCore.sv"
+`endif
 
 module Conv2d #(
     parameter int IC = 4,

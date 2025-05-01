@@ -1,7 +1,9 @@
+`ifndef SYNTHESIS
 `include "Conv2d.sv"
 `include "MaxPool2d.sv"
 `include "FC.sv"
 `include "Comparator.sv"
+`endif
 
 module bnn_top #(
     parameter int CONV1_IMG_IN_SIZE = 30,
@@ -16,6 +18,7 @@ module bnn_top #(
     parameter int FC_IC = POOL2_IMG_OUT_SIZE * POOL2_IMG_OUT_SIZE * CONV2_OC,
     parameter int OUTPUT_BIT = $clog2(FC_OC + 1)  // num of bits to enumerate each class
 ) (
+
     input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in [0:CONV1_IC-1],
     input logic clk,
     input logic data_in_ready,

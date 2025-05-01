@@ -3,8 +3,7 @@
 module spi_peripheral (
     input logic rst_n,
     input logic clk,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
+
 
     // SPI pins
     input logic SCLK,
@@ -34,9 +33,11 @@ module spi_peripheral (
 
   spi_state_t spi_state, spi_next_state;
 
+`ifndef SYNTHESIS
   logic [31:0] cycle_cnt;
   spi_state_t prev_spi_state;
   logic prev_cs_sync_2, prev_rx_mode;
+`endif
 
   //===================================================
   // Synchronizers

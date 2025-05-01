@@ -69,7 +69,8 @@
         "iterator": "cpp",
         "memory_resource": "cpp",
         "random": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "bitset": "cpp"
     },
     "cSpell.words": [
         "localparam"

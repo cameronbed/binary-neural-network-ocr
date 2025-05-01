@@ -1,4 +1,4 @@
-// `ifndef SYNTHESIS
+`ifndef SYNTHESIS
 
 `timescale 1ns / 1ps
 module debug_module (
@@ -132,4 +132,4 @@ module debug_module (
 
 endmodule
 
-// `endif
+`endif

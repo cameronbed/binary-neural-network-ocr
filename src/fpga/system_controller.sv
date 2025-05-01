@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
-//`ifdef SYNTHESIS
+`ifndef SYNTHESIS
 `include "spi_peripheral.sv"
 `include "bnn_interface.sv"
 `include "debug_module.sv"
 `include "fsm_controller.sv"
 `include "image_buffer.sv"
-//`endif
+`endif
 
 module system_controller (
     input logic clk,
@@ -22,11 +22,11 @@ module system_controller (
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
 
-    output logic heartbeat,
+    output logic heartbeat
 
-    //`ifndef SYNTHESIS
+`ifndef SYNTHESIS,
     input logic debug_trigger
-    //`endif
+`endif
 );
   //===================================================
   // Internal Signals
@@ -50,13 +50,25 @@ module system_controller (
     end
   end
 
-  // ---------------------- Hearbeat
+  // ---------------------- Cycle Counters ----------------------
+`ifndef SYNTHESIS
   logic [31:0] main_cycle_cnt, sclk_cycle_cnt;
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) heartbeat <= 0;
+    if (!rst_n) begin
+      main_cycle_cnt <= 0;
+      sclk_cycle_cnt <= 0;
+    end
     else begin
       main_cycle_cnt <= main_cycle_cnt + 1;
       if (SCLK) sclk_cycle_cnt <= sclk_cycle_cnt + 1;
+    end
+  end
+`endif
+
+  //------------------ Heartbeat Signal -----------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) heartbeat <= 0;
+    else begin
       heartbeat <= ~heartbeat;
     end
   end
@@ -87,7 +99,6 @@ module system_controller (
   //===================================================
   logic spi_rx_enable;
   logic buffer_full, buffer_empty, clear_internal;
-  logic [3:0] fsm_state;
   logic [6:0] buffer_write_addr;
   logic [7:0] buffer_write_data;
   logic       bnn_enable;
@@ -97,8 +108,6 @@ module system_controller (
   controller_fsm u_controller_fsm (
       .clk(clk),
       .rst_n(rst_n),
-      .main_cycle_cnt(main_cycle_cnt),
-      .sclk_cycle_cnt(sclk_cycle_cnt),
 
       // SPI
       .spi_rx_data(spi_rx_data),
@@ -122,7 +131,6 @@ module system_controller (
 
       // BNN Interface
       .result_ready(result_ready),
-      .result_out  (result_out),
       .bnn_enable  (bnn_enable)
   );
 
@@ -136,8 +144,6 @@ module system_controller (
   spi_peripheral spi_peripheral_inst (
       .rst_n(rst_n),
       .clk(clk),
-      .main_cycle_cnt(main_cycle_cnt),
-      .sclk_cycle_cnt(sclk_cycle_cnt),
 
       // SPI Pins
       .SCLK(SCLK),
@@ -163,8 +169,6 @@ module system_controller (
   image_buffer u_image_buffer (
       .clk(clk),
       .rst_n(rst_n),
-      .main_cycle_cnt(main_cycle_cnt),
-      .sclk_cycle_cnt(sclk_cycle_cnt),
 
       // inputs
       .write_request(buffer_write_request),
@@ -186,8 +190,6 @@ module system_controller (
   bnn_interface u_bnn_interface (
       .clk(clk),
       .rst_n(rst_n),
-      .main_cycle_cnt(main_cycle_cnt),
-      .sclk_cycle_cnt(sclk_cycle_cnt),
 
       // Data
       .img_in(image_buffer),  // Packed vector matches declaration
@@ -200,7 +202,7 @@ module system_controller (
       .bnn_clear(clear_internal)
   );
 
-  // `ifndef SYNTHESIS
+`ifndef SYNTHESIS
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
       .clk         (clk),
@@ -248,6 +250,6 @@ module system_controller (
       .main_cycle_cnt(main_cycle_cnt),
       .sclk_cycle_cnt(sclk_cycle_cnt)
   );
-  // `endif
+`endif
 
 endmodule

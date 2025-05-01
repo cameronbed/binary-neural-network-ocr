@@ -1,12 +1,13 @@
 `timescale 1ns / 1ps
 
+`ifndef SYNTHESIS
 `include "bnn_module/bnn_top.sv"
+`endif
+
 
 module bnn_interface (
     input logic clk,
     input logic rst_n,
-    input logic [31:0] main_cycle_cnt,
-    input logic [31:0] sclk_cycle_cnt,
 
     // Data
     input  logic [903:0] img_in,
@@ -32,14 +33,13 @@ module bnn_interface (
 
   logic result_ready_internal;
 
-  logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] img_in_truncated[0:CONV1_IC-1];
-
-  assign img_in_truncated[0] = img_in[899:0];
+  logic [899:0] img_in_truncated;
+  assign img_in_truncated = img_in[903:4];
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
       .clk(clk),
-      .img_in(img_in_truncated),
+      .conv1_img_in(img_in_truncated),
       .data_in_ready(bnn_enable),
       .result(result_out),
       .data_out_ready(result_ready_internal)
