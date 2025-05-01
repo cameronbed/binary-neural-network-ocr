@@ -41,6 +41,24 @@ module bnn_interface (
   assign conv1_img_in[0] = img_in_truncated;
 
   // ----------------- BNN Module Instantiation -----------------
+
+  // ======================= MOCK MODULE
+  // Mock behavior: Generate a pseudo-random result based on img_in_truncated
+  logic [3:0] lfsr;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      lfsr <= 4'b0001;  // Initialize LFSR
+    end else if (bnn_enable) begin
+      // Simple LFSR for pseudo-random number generation
+      lfsr <= {lfsr[2:0], ^(lfsr[3:2] ^ img_in_truncated[0])};
+    end
+  end
+
+  assign result_out = lfsr % 10;  // Random number between 0-9
+  assign result_ready_internal = bnn_enable;  // Simulate ready signal
+  // ======================= END MOCK MODULE
+
   bnn_top u_bnn_top (
       .clk(clk),
       .conv1_img_in('{img_in_truncated}),

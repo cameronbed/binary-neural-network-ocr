@@ -3,6 +3,7 @@
 `include "MaxPool2d.sv"
 `include "FC.sv"
 `include "Comparator.sv"
+`include "Conv2d_MaxPool2d.sv"
 `endif
 
 module bnn_top #(
