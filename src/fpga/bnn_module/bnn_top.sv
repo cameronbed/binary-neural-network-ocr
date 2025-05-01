@@ -1,3 +1,6 @@
+`ifndef BNN_TOP_SV
+`define BNN_TOP_SV
+
 `ifndef SYNTHESIS
 `include "Conv2d_MaxPool2d.sv"
 `include "FC.sv"
@@ -5898,3 +5901,5 @@ module bnn_top #(
   // wire _unused_ok = &{result};
 
 endmodule
+
+`endif

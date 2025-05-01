@@ -1,8 +1,10 @@
 `ifndef CONV2D_MAXPOOL2D_SV
 `define CONV2D_MAXPOOL2D_SV
 
+`ifndef SYNTHESIS
 `include "ConvCore.sv"
 `include "MaxPoolCore.sv"
+`endif
 
 module Conv2d_MaxPool2d #(
     parameter int IC = 4,
