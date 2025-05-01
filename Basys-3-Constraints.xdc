@@ -84,7 +84,7 @@ set_property CONFIG_MODE SPIx4 [current_design]
 ## --------------------------
 
 # Reference clock (your FPGA clock)
-set clk_freq 100.0
+set clk_freq 50.0
 create_clock -name sys_clk -period [expr 1000.0 / $clk_freq] [get_ports clk]
 
 # SPI clock period (1 MHz = 1000 ns period)

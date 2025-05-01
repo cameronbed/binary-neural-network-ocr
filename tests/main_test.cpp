@@ -37,7 +37,6 @@ int main(int argc, char **argv)
     test_bnn_inference(dut);
     test_image_buffer_module(dut);
     test_image_buffer(dut);
-    ;
 
     // Reset VERBOSE if needed
     VERBOSE = 0;

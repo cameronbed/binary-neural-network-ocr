@@ -44,17 +44,25 @@ module spi_peripheral (
   logic copi_q1, copi_q2;
   logic sclk_last;
 
+  logic spi_cs_n_meta, spi_cs_n_sync;
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       sclk_last <= 1'b0;
 
-      copi_q1   <= 1'b0;
-      copi_q2   <= 1'b0;
+      copi_q1 <= 1'b0;
+      copi_q2 <= 1'b0;
+
+      spi_cs_n_meta <= 1'b1;
+      spi_cs_n_sync <= 1'b1;
     end else begin
       sclk_last <= SCLK;
 
-      copi_q1   <= COPI;
-      copi_q2   <= copi_q1;
+      copi_q1 <= COPI;
+      copi_q2 <= copi_q1;
+
+      spi_cs_n_meta <= spi_cs_n;
+      spi_cs_n_sync <= spi_cs_n_meta;
     end
   end
 
@@ -79,7 +87,7 @@ module spi_peripheral (
 
     case (spi_state)
       SPI_IDLE: begin
-        if (!spi_cs_n && rx_enable) spi_next_state = SPI_RX;
+        if (!spi_cs_n_sync && rx_enable) spi_next_state = SPI_RX;
       end
 
       SPI_RX: begin
@@ -104,7 +112,7 @@ module spi_peripheral (
     if (!rst_n) begin
       bit_cnt   <= 4'd0;
       shift_reg <= 8'd0;
-    end else if (!spi_cs_n && rx_enable) begin
+    end else if (!spi_cs_n_sync && rx_enable) begin
       if (sclk_rising) begin
         shift_reg <= {shift_reg[6:0], copi_q1};  // shift in data
         bit_cnt   <= bit_cnt + 1;
