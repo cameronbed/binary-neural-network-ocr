@@ -1,3 +1,6 @@
+`ifndef MAXPOOLCORE_SV
+`define MAXPOOLCORE_SV
+
 module MaxPoolCore #(
     parameter int IMG_IN_SIZE  = 28,
     parameter int IMG_OUT_SIZE = IMG_IN_SIZE / 2
@@ -23,3 +26,5 @@ module MaxPoolCore #(
     end
   endgenerate
 endmodule
+
+`endif

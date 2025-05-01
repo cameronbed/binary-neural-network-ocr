@@ -2,6 +2,7 @@
 `include "Conv2d_MaxPool2d.sv"
 `include "FC.sv"
 `include "Comparator.sv"
+`include "Conv2d_MaxPool2d.sv"
 `endif
 
 module bnn_top #(
@@ -18,13 +19,12 @@ module bnn_top #(
     parameter int OUTPUT_BIT = $clog2(FC_OC + 1)  // num of bits to enumerate each class
 ) (
 
-    input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in [0:CONV1_IC-1],
+    input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in[0:CONV1_IC-1],
     input logic clk,
     input logic data_in_ready,
     output logic [OUTPUT_BIT-1:0] result,
     output logic data_out_ready
 );
-
     // assign conv1_img_in = img_in;
     (* rom_style = "block" *) 
     logic [CONV1_IC*9-1:0] conv1_weights [0:CONV1_OC-1] = {9'h28, 9'h1c4, 9'h17d, 9'h1e2, 9'haf, 9'hb1, 9'hb5, 9'h1ca, 9'h1b1, 9'h79, 9'h6d, 9'h1d5, 9'h145, 9'h158, 9'ha0, 9'h11c};
@@ -45,62 +45,62 @@ module bnn_top #(
     // logic pool2_data_ready;
     logic fc_data_ready;
 
-    Conv2d_MaxPool2d #(
-        .IC(CONV1_IC),
-        .OC(CONV1_OC),
-        .CONV_IMG_IN_SIZE(CONV1_IMG_IN_SIZE)
-    ) conv_pool1 (
-        .clk(clk),
-        .data_in_ready(data_in_ready),
-        .img_in(conv1_img_in),
-        .weights(conv1_weights),
-        .img_out(pool1_img_out),
-        .data_out_ready(conv1_data_ready)
-    );
+  Conv2d_MaxPool2d #(
+      .IC(CONV1_IC),
+      .OC(CONV1_OC),
+      .CONV_IMG_IN_SIZE(CONV1_IMG_IN_SIZE)
+  ) conv_pool1 (
+      .clk(clk),
+      .data_in_ready(data_in_ready),
+      .img_in(conv1_img_in),
+      .weights(conv1_weights),
+      .img_out(pool1_img_out),
+      .data_out_ready(conv1_data_ready)
+  );
 
-    Conv2d_MaxPool2d #(
-        .IC(CONV1_OC),
-        .OC(CONV2_OC),
-        .CONV_IMG_IN_SIZE(POOL1_IMG_OUT_SIZE)
-    ) conv_pool2 (
-        .clk(clk),
-        .data_in_ready(conv1_data_ready),
-        .img_in(pool1_img_out),
-        .weights(conv2_weights),
-        .img_out(pool2_img_out),
-        .data_out_ready(conv2_data_ready)
-    );
+  Conv2d_MaxPool2d #(
+      .IC(CONV1_OC),
+      .OC(CONV2_OC),
+      .CONV_IMG_IN_SIZE(POOL1_IMG_OUT_SIZE)
+  ) conv_pool2 (
+      .clk(clk),
+      .data_in_ready(conv1_data_ready),
+      .img_in(pool1_img_out),
+      .weights(conv2_weights),
+      .img_out(pool2_img_out),
+      .data_out_ready(conv2_data_ready)
+  );
 
-    genvar conv2_oc;
-    generate
-        for (conv2_oc=0; conv2_oc<CONV2_OC; conv2_oc=conv2_oc+1) begin
-            assign fc_in[conv2_oc*POOL2_IMG_OUT_SIZE*POOL2_IMG_OUT_SIZE +: POOL2_IMG_OUT_SIZE*POOL2_IMG_OUT_SIZE] = pool2_img_out[conv2_oc];
-        end
-    endgenerate
+  genvar conv2_oc;
+  generate
+    for (conv2_oc = 0; conv2_oc < CONV2_OC; conv2_oc = conv2_oc + 1) begin
+      assign fc_in[conv2_oc*POOL2_IMG_OUT_SIZE*POOL2_IMG_OUT_SIZE +: POOL2_IMG_OUT_SIZE*POOL2_IMG_OUT_SIZE] = pool2_img_out[conv2_oc];
+    end
+  endgenerate
 
 
-    FC #(
-        .IC(FC_IC),
-        .OC(FC_OC)
-    ) fc (
-        .clk(clk),
-        .data_in_ready(conv2_data_ready),
-        .in(fc_in),
-        .weights(fc_weights),
-        .out(fc_out),
-        .data_out_ready(fc_data_ready)
-    );
+  FC #(
+      .IC(FC_IC),
+      .OC(FC_OC)
+  ) fc (
+      .clk(clk),
+      .data_in_ready(conv2_data_ready),
+      .in(fc_in),
+      .weights(fc_weights),
+      .out(fc_out),
+      .data_out_ready(fc_data_ready)
+  );
 
-    Comparator #(
-        .IC(FC_OC),
-    ) compare (
-        .clk(clk),
-        .data_in_ready(fc_data_ready),
-        .in(fc_out),
-        .out(result),
-        .data_out_ready(data_out_ready)
-    );
+  Comparator #(
+      .IC(FC_OC),
+  ) compare (
+      .clk(clk),
+      .data_in_ready(fc_data_ready),
+      .in(fc_out),
+      .out(result),
+      .data_out_ready(data_out_ready)
+  );
 
-    // wire _unused_ok = &{result};
+  // wire _unused_ok = &{result};
 
 endmodule

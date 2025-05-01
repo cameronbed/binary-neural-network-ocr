@@ -1,17 +1,21 @@
+`timescale 1ns / 1ps
+
+`ifndef SYNTHESIS
 `include "ConvCore.sv"
 `include "MaxPoolCore.sv"
+`endif
 
 module Conv2d_MaxPool2d #(
     parameter int IC = 4,
-    parameter int OC = 8, 
+    parameter int OC = 8,
     parameter int CONV_IMG_IN_SIZE = 30,
-    parameter int CONV_IMG_OUT_SIZE = CONV_IMG_IN_SIZE-2,
-    parameter int POOL_IMG_OUT_SIZE = CONV_IMG_OUT_SIZE/2
-)(
+    parameter int CONV_IMG_OUT_SIZE = CONV_IMG_IN_SIZE - 2,
+    parameter int POOL_IMG_OUT_SIZE = CONV_IMG_OUT_SIZE / 2
+) (
     input logic clk,
     input logic data_in_ready,
-    input logic [CONV_IMG_IN_SIZE*CONV_IMG_IN_SIZE-1:0] img_in [0:IC-1],
-    input logic [IC*9-1:0] weights [0:OC-1],
+    input logic [CONV_IMG_IN_SIZE*CONV_IMG_IN_SIZE-1:0] img_in[0:IC-1],
+    input logic [IC*9-1:0] weights[0:OC-1],
     output logic [POOL_IMG_OUT_SIZE*POOL_IMG_OUT_SIZE-1:0] img_out [0:OC-1], /* verilator lint_off UNUSEDSIGNAL */
     output logic data_out_ready
 );
@@ -50,6 +54,16 @@ module Conv2d_MaxPool2d #(
             end
         end
     end
+  end
+
+  ConvCore #(
+      .IC(IC),
+      .IMG_IN_SIZE(CONV_IMG_IN_SIZE)
+  ) core (
+      .img_in (img_in),
+      .weights(core_weight),
+      .img_out(core_img_out)
+  );
 
     ConvCore#(
         .IC(IC),

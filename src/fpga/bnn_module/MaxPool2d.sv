@@ -1,5 +1,5 @@
-`ifndef SYNTHESIS
 
+`ifndef SYNTHESIS
 `include "MaxPoolCore.sv"
 `endif
 module MaxPool2d #(
