@@ -108,6 +108,49 @@ void send_digit(Vsystem_controller *dut, const std::vector<std::string> &digit, 
     debug(dut);
 }
 
+void send_pattern(Vsystem_controller *dut, const std::vector<std::string> &pattern)
+{
+    std::cout << "[TB IMG] Sending custom pattern\n";
+
+    // Flatten the 30×30 pattern into one big string
+    std::string flat;
+    flat.reserve(30 * 30);
+    for (auto &row : pattern)
+        flat += row;
+    assert(flat.size() == 900);
+
+    // CLEAR buffer and wait idle
+    spi_send_byte(dut, CMD_CLEAR);
+    while (dut->status_code_reg == STATUS_BNN_BUSY)
+        tick_main_clk(dut, 1);
+    check_fsm_state(dut, STATUS_IDLE, "STATUS_IDLE");
+
+    // ASK to send image
+    spi_send_byte(dut, CMD_IMG_SEND_REQUEST);
+    tick_main_clk(dut, 5);
+    check_fsm_state(dut, STATUS_RX_IMG_RDY, "STATUS_RX_IMG_RDY");
+
+    // Stream the image bits LSB-first in bytes
+    for (size_t i = 0; i < flat.size(); i += 8)
+    {
+        uint8_t b = 0;
+        for (int bit = 0; bit < 8 && i + bit < flat.size(); ++bit)
+            if (flat[i + bit] == '1')
+                b |= (1 << bit);
+        spi_send_byte(dut, b);
+        tick_main_clk(dut, 1);
+    }
+
+    // Wait for BNN to consume
+    check_fsm_state(dut, STATUS_BNN_BUSY, "STATUS_BNN_BUSY");
+    while (dut->status_code_reg == STATUS_BNN_BUSY)
+        tick_main_clk(dut, 1);
+
+    std::cout << "[TB IMG] Custom pattern sent successfully\n";
+
+    debug(dut);
+}
+
 void test_image_buffer(Vsystem_controller *dut)
 {
     std::cout << "\n[TB IMG] test_image_buffer [Clock cycles: " << main_clk_ticks << "]\n";
@@ -413,16 +456,52 @@ void test_image_buffer(Vsystem_controller *dut)
         "000000000000000000000000000000",
         "000000000000000000000000000000"};
 
+    std::vector<std::string> repeating_pattern = {
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111",
+        "100000001100000011100000111100",
+        "111110001111110011111100111111"};
+
     std::vector<std::vector<std::string>> all_digits = {
         digit_0, digit_1, digit_2, digit_3,
         digit_4, digit_5, digit_6, digit_8, digit_9};
+
+    send_pattern(dut, repeating_pattern);
+    tick_main_clk(dut, 5);
+    debug(dut);
 
     // for (size_t idx = 0; idx < all_digits.size(); ++idx)
     // {
     //     send_digit(dut, all_digits[idx], idx);
     // }
 
-    send_digit(dut, digit_8, 0); // Test digit 0 again
+    // send_digit(dut, digit_8, 0); // Test digit 0 again
 
     std::cout << "[TB IMG] ✅ Image buffer and FSM behavior passed\n";
 }
