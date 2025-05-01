@@ -1,3 +1,6 @@
+`ifndef CONV2D_SV
+`define CONV2D_SV
+
 `ifndef SYNTHESIS
 `include "ConvCore.sv"
 `endif
@@ -49,3 +52,5 @@ module Conv2d #(
   );
 
 endmodule
+
+`endif

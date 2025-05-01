@@ -1,3 +1,5 @@
+`ifndef MAXPOOL2D_SV
+`define MAXPOOL2D_SV
 
 `ifndef SYNTHESIS
 `include "MaxPoolCore.sv"
@@ -46,3 +48,5 @@ module MaxPool2d #(
   );
 
 endmodule
+
+`endif
