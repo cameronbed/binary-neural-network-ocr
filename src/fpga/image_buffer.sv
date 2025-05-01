@@ -20,7 +20,7 @@ module image_buffer (
   parameter int TOTAL_BITS = 904;
   parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
 
-  (* ram_style = "block" *) logic [7:0] image_buffer[0:112];
+  logic [7:0] image_buffer[0:112];
 
   logic [6:0] write_addr_internal;
   logic [6:0] next_addr_ff;
