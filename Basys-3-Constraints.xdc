@@ -83,17 +83,33 @@ set_property CONFIG_MODE SPIx4 [current_design]
 ## Timing Constraints Section
 ## --------------------------
 
-# Reference clock (your FPGA clock)
+# FPGA clock
 set clk_freq 50.0
-create_clock -name sys_clk -period [expr 1000.0 / $clk_freq] [get_ports clk]
+create_clock -name sys_clk \
+             -period [expr 1000.0 / $clk_freq] \
+             [get_ports clk]
 
-# SPI clock period (1 MHz = 1000 ns period)
-set spi_clk_period 1000.0
+## ------------------------------------------------------------------------
+## dummy clock on the SPI clock pin (1 MHz)
+## ------------------------------------------------------------------------
+set spi_clk_period 1000.0   ;# 1 MHz → 1000 ns
+create_clock -name sclk_async \
+             -period $spi_clk_period \
+             [get_ports SCLK]
 
-# INPUT DELAYS — assume data arrives in middle of SPI clock cycle
-set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports COPI]
-set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports SCLK]
-set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports spi_cs_n]
+## ------------------------------------------------------------------------
+## sys_clk and sclk_async asynchronous (so no timing paths will be attempted between them)
+## ------------------------------------------------------------------------
+set_clock_groups -asynchronous \
+    -group { [get_clocks sys_clk] } \
+    -group { [get_clocks sclk_async] }
+
+## ------------------------------------------------------------------------
+## 4) False-path any direct COPI / CS → sys_clk paths
+## ------------------------------------------------------------------------
+set_false_path -from [get_ports COPI]            -to [get_clocks sys_clk]
+set_false_path -from [get_ports spi_cs_n]        -to [get_clocks sys_clk]
+set_false_path -from [get_clocks sclk_async]     -to [get_clocks sys_clk]
 
 # Optional: for async resets
 set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_pin]
@@ -103,7 +119,3 @@ set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_sw_input]
 set_output_delay -clock [get_clocks sys_clk] 10 [get_ports seg[*]]
 set_output_delay -clock [get_clocks sys_clk] 10 [get_ports status_code_reg[*]]
 set_output_delay -clock [get_clocks sys_clk] 10 [get_ports heartbeat]
-
-set_false_path -from [get_ports SCLK]
-set_false_path -from [get_ports COPI]
-set_false_path -from [get_ports spi_cs_n]

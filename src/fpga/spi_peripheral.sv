@@ -53,6 +53,7 @@ module spi_peripheral (
 
       sclk_q1 <= 1'b0;
       sclk_q2 <= 1'b0;
+
       cs_q1   <= 1'b1;
       cs_q2   <= 1'b1;
     end else begin
@@ -70,7 +71,7 @@ module spi_peripheral (
   //===================================================
   // Edge Detection for SCLK
   //===================================================
-  wire sclk_rising = (sclk_q2 == 1'b1 && sclk_q1 == 1'b0);
+  wire sclk_rising = (sclk_q1 && !sclk_q2);
 
   //=========================================
   // State Transition
@@ -112,15 +113,30 @@ module spi_peripheral (
     if (!rst_n) begin
       bit_cnt   <= 4'd0;
       shift_reg <= 8'd0;
-    end else if (!cs_q2 && rx_enable) begin
-      if (sclk_rising) begin
-        shift_reg <= {shift_reg[6:0], copi_q2};  // shift in data
-        bit_cnt   <= bit_cnt + 1;
-      end
     end else begin
-      bit_cnt   <= 4'd0;
-      shift_reg <= 8'd0;
+      case (spi_state)
+        SPI_RX: begin
+          if (sclk_rising) begin
+            shift_reg <= {shift_reg[6:0], copi_q2};
+            bit_cnt   <= bit_cnt + 1;
+          end
+        end
+
+        SPI_BYTE_READY: begin
+          if (byte_taken) begin
+            bit_cnt   <= 4'd0;
+            shift_reg <= 8'd0;
+          end
+        end
+
+        default: ;  // hold in SPI_IDLE
+      endcase
     end
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) byte_valid <= 1'b0;
+    else byte_valid <= (spi_state == SPI_BYTE_READY);
   end
 
   //=========================================
