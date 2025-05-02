@@ -144,12 +144,13 @@ module controller_fsm (
       S_WAIT_IMAGE: begin
         rx_enable = 1;
         if (new_spi_byte) begin
-          next_state = S_IMG_RX;
-          next_status_code_reg = STATUS_RX_IMG;
-          byte_taken_comb = 1;
-
-          buffer_write_request = 1;
-          buffer_write_data = spi_rx_data;
+          if (spi_byte_valid) begin
+            next_state           = S_IMG_RX;
+            next_status_code_reg = STATUS_RX_IMG;
+            byte_taken_comb      = 1;
+            buffer_write_request = 1;
+            buffer_write_data    = spi_rx_data;
+          end
         end
       end
 

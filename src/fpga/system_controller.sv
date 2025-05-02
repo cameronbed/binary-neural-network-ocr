@@ -105,7 +105,12 @@ module system_controller (
         4'b1001: seg_next = 7'b001_0000;  // Display 9
         default: seg_next = 7'b111_1111;  // Blank
       endcase
+
+      // $display("[TRACE][%0t] result_ready=%b  result_out=%0h  result_reg=%0h  seg_next=%b  seg=%b",
+      //        $time, result_ready, result_out, result_reg, seg_next, seg);
     end
+
+    
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
