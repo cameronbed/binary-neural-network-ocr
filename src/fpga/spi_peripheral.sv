@@ -44,7 +44,8 @@ module spi_peripheral (
   logic copi_q1, copi_q2;
   logic sclk_last;
 
-  logic spi_cs_n_meta, spi_cs_n_sync;
+  logic sclk_q1, sclk_q2;
+  logic cs_q1, cs_q2;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -53,23 +54,28 @@ module spi_peripheral (
       copi_q1 <= 1'b0;
       copi_q2 <= 1'b0;
 
-      spi_cs_n_meta <= 1'b1;
-      spi_cs_n_sync <= 1'b1;
+      sclk_q1 <= 1'b0;
+      sclk_q2 <= 1'b0;
+      cs_q1 <= 1'b1;
+      cs_q2 <= 1'b1;
     end else begin
       sclk_last <= SCLK;
 
       copi_q1 <= COPI;
       copi_q2 <= copi_q1;
 
-      spi_cs_n_meta <= spi_cs_n;
-      spi_cs_n_sync <= spi_cs_n_meta;
+      sclk_q1 <= SCLK;
+      sclk_q2 <= sclk_q1;
+
+      cs_q1 <= spi_cs_n;
+      cs_q2 <= cs_q1;
     end
   end
 
   //===================================================
   // Edge Detection for SCLK
   //===================================================
-  wire sclk_rising = (SCLK == 1'b1 && sclk_last == 1'b0);
+  wire sclk_rising = (sclk_q2 == 1'b1 && sclk_q1 == 1'b0);
   //wire sclk_falling = (SCLK == 1'b0 && sclk_last == 1'b1);
 
   //=========================================
@@ -87,7 +93,7 @@ module spi_peripheral (
 
     case (spi_state)
       SPI_IDLE: begin
-        if (!spi_cs_n_sync && rx_enable) spi_next_state = SPI_RX;
+        if (!cs_q2 && rx_enable) spi_next_state = SPI_RX;
       end
 
       SPI_RX: begin
@@ -112,7 +118,7 @@ module spi_peripheral (
     if (!rst_n) begin
       bit_cnt   <= 4'd0;
       shift_reg <= 8'd0;
-    end else if (!spi_cs_n_sync && rx_enable) begin
+    end else if (!cs_q2 && rx_enable) begin
       if (sclk_rising) begin
         shift_reg <= {shift_reg[6:0], copi_q1};  // shift in data
         bit_cnt   <= bit_cnt + 1;
