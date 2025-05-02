@@ -24,8 +24,8 @@ module system_controller (
 
     output logic heartbeat
 
-`ifndef SYNTHESIS,
-    input logic debug_trigger
+`ifndef SYNTHESIS
+    ,input logic debug_trigger
 `endif
 );
   //===================================================
@@ -74,13 +74,25 @@ module system_controller (
   // 7-Segment Display
   //===================================================
   logic [3:0] result_out;
+  logic [3:0] result_reg;
+  logic       result_reg_valid;
   logic [6:0] seg_next;
 
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      result_reg       <= 4'd0;
+      result_reg_valid <= 1'b0;
+    end else begin
+      result_reg_valid <= result_ready;
+      if (result_ready) result_reg <= result_out;
+    end
+  end
+
   always_comb begin
-    if (!result_ready) begin
+    if (!result_reg_valid) begin
       seg_next = 7'b111_1111;  // blank when no result
     end else begin
-      case (result_out)
+      case (result_reg)
         4'b0000: seg_next = 7'b100_0000;  // Display 0
         4'b0001: seg_next = 7'b111_1001;  // Display 1
         4'b0010: seg_next = 7'b010_0100;  // Display 2
