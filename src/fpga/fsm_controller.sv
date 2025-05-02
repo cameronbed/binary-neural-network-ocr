@@ -28,8 +28,6 @@ module controller_fsm (
     input  logic result_ready,
     output logic bnn_enable
 );
-  parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
-
   // Receive codes
   parameter logic [7:0] CMD_IMG_SEND_REQUEST = 8'hFE;  // 11111101
   parameter logic [7:0] CMD_CLEAR = 8'hFD;  // 11111011
@@ -134,15 +132,12 @@ module controller_fsm (
             next_status_code_reg = STATUS_RX_IMG_RDY;
             byte_taken_comb = 1;
 
-          end else if (buffer_write_ready) begin
-            buffer_write_request = 1;
-            buffer_write_data = spi_rx_data;
-            byte_taken_comb = 1;
-
           end else begin
             next_status_code_reg = STATUS_ERROR;
             byte_taken_comb = 1;
           end
+        end else begin
+          next_status_code_reg = STATUS_IDLE;
         end
       end
 

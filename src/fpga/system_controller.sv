@@ -22,9 +22,9 @@ module system_controller (
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
 
-    output logic heartbeat
+    output logic heartbeat,
 
-`ifndef SYNTHESIS,
+`ifndef SYNTHESIS
     input logic debug_trigger
 `endif
 );
@@ -33,8 +33,6 @@ module system_controller (
   //===================================================
   logic rst_n;
   logic result_ready;
-  logic send_image;
-  logic status_ready;
 
   assign rst_n = rst_n_pin;
 
@@ -57,8 +55,7 @@ module system_controller (
     if (!rst_n) begin
       main_cycle_cnt <= 0;
       sclk_cycle_cnt <= 0;
-    end
-    else begin
+    end else begin
       main_cycle_cnt <= main_cycle_cnt + 1;
       if (SCLK) sclk_cycle_cnt <= sclk_cycle_cnt + 1;
     end
@@ -77,21 +74,31 @@ module system_controller (
   // 7-Segment Display
   //===================================================
   logic [3:0] result_out;
+  logic [6:0] seg_next;
 
   always_comb begin
-    case (result_out)
-      4'b0000: seg = 7'b1000000;  // Display 0
-      4'b0001: seg = 7'b1111001;  // Display 1
-      4'b0010: seg = 7'b0100100;  // Display 2
-      4'b0011: seg = 7'b0110000;  // Display 3
-      4'b0100: seg = 7'b0011001;  // Display 4
-      4'b0101: seg = 7'b0010010;  // Display 5
-      4'b0110: seg = 7'b0000010;  // Display 6
-      4'b0111: seg = 7'b1111000;  // Display 7
-      4'b1000: seg = 7'b0000000;  // Display 8
-      4'b1001: seg = 7'b0010000;  // Display 9
-      default: seg = 7'b1111111;  // Blank
-    endcase
+    if (!result_ready) begin
+      seg_next = 7'b111_1111;  // blank when no result
+    end else begin
+      case (result_out)
+        4'b0000: seg_next = 7'b100_0000;  // Display 0
+        4'b0001: seg_next = 7'b111_1001;  // Display 1
+        4'b0010: seg_next = 7'b010_0100;  // Display 2
+        4'b0011: seg_next = 7'b011_0000;  // Display 3
+        4'b0100: seg_next = 7'b001_1001;  // Display 4
+        4'b0101: seg_next = 7'b001_0010;  // Display 5
+        4'b0110: seg_next = 7'b000_0010;  // Display 6
+        4'b0111: seg_next = 7'b111_1000;  // Display 7
+        4'b1000: seg_next = 7'b000_0000;  // Display 8
+        4'b1001: seg_next = 7'b001_0000;  // Display 9
+        default: seg_next = 7'b111_1111;  // Blank
+      endcase
+    end
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) seg <= 7'b1111111;
+    else seg <= seg_next;
   end
 
   //===================================================
@@ -104,9 +111,10 @@ module system_controller (
   logic       bnn_enable;
   logic       buffer_write_request;
   logic       buffer_write_ready;
+  logic [7:0] spi_rx_data;
 
   controller_fsm u_controller_fsm (
-      .clk(clk),
+      .clk  (clk),
       .rst_n(rst_n),
 
       // SPI
@@ -137,13 +145,13 @@ module system_controller (
   //===================================================
   // SPI Peripheral
   //===================================================
-  logic [7:0] spi_rx_data;
-  logic       spi_byte_valid;
-  logic       byte_taken;
+
+  logic spi_byte_valid;
+  logic byte_taken;
 
   spi_peripheral spi_peripheral_inst (
       .rst_n(rst_n),
-      .clk(clk),
+      .clk  (clk),
 
       // SPI Pins
       .SCLK(SCLK),
@@ -162,12 +170,11 @@ module system_controller (
   //===================================================
   // Image Buffer
   //===================================================
-  logic [903:0] image_buffer;
-  logic [  6:0] write_addr;
+  logic [903:0] image_buffer_internal;
 
 
   image_buffer u_image_buffer (
-      .clk(clk),
+      .clk  (clk),
       .rst_n(rst_n),
 
       // inputs
@@ -180,19 +187,18 @@ module system_controller (
       //outputs
       .buffer_full (buffer_full),
       .buffer_empty(buffer_empty),
-      .write_addr  (write_addr),
-      .img_out     (image_buffer)
+      .img_out     (image_buffer_internal)
   );
 
   //===================================================
   // BNN Interface 
   //===================================================
   bnn_interface u_bnn_interface (
-      .clk(clk),
+      .clk  (clk),
       .rst_n(rst_n),
 
       // Data
-      .img_in(image_buffer),  // Packed vector matches declaration
+      .img_in(image_buffer_internal),  // Packed vector matches declaration
       .result_out(result_out),  // Match 4-bit width
 
       // Control signals
@@ -234,7 +240,7 @@ module system_controller (
       .data_in     (buffer_write_data),
 
       // BNN
-      .img_in(image_buffer),
+      .img_in(image_buffer_internal),
 
       // Control signals
       .img_buffer_full(buffer_full),

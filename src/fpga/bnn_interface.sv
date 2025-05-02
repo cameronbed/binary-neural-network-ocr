@@ -104,6 +104,8 @@ module bnn_interface (
         INFERENCE: begin
           if (result_ready_internal == 1) begin
             result_ready <= 1'd1;
+          end else begin
+            result_ready <= 1'b0;  // hold ready until result is available
           end
         end
 
@@ -115,7 +117,9 @@ module bnn_interface (
           end
         end
 
-        default: result_ready <= 1'b0;
+        default: begin
+          result_ready <= 1'b0;
+        end
       endcase
     end
   end
