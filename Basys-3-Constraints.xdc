@@ -103,3 +103,7 @@ set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_sw_input]
 set_output_delay -clock [get_clocks sys_clk] 10 [get_ports seg[*]]
 set_output_delay -clock [get_clocks sys_clk] 10 [get_ports status_code_reg[*]]
 set_output_delay -clock [get_clocks sys_clk] 10 [get_ports heartbeat]
+
+set_false_path -from [get_ports SCLK]
+set_false_path -from [get_ports COPI]
+set_false_path -from [get_ports spi_cs_n]
