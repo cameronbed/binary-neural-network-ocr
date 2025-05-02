@@ -22,9 +22,9 @@ module system_controller (
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
 
-    output logic heartbeat,
+    output logic heartbeat
 
-`ifndef SYNTHESIS
+`ifndef SYNTHESIS,
     input logic debug_trigger
 `endif
 );
