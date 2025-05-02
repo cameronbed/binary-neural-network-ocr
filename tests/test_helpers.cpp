@@ -44,7 +44,7 @@ void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
 
     dut->spi_cs_n = 0; // Start transaction
     dut->eval();
-    tick_main_clk(dut, 2); // Setup time after CS_N falling
+    tick_main_clk(dut, 5); // Setup time after CS_N falling
 
     if (VERBOSE)
     {
@@ -66,6 +66,8 @@ void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
         if (VERBOSE)
             debug(dut);
     }
+
+    tick_main_clk(dut, 5);
 
     dut->spi_cs_n = 1; // End transaction
     dut->eval();

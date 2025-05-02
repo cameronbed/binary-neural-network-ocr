@@ -11,7 +11,7 @@
 module system_controller (
     input logic clk,
     input logic rst_n_pin,
-    input logic rst_n_sw_input,
+    //input logic rst_n_sw_input,
 
     // SPI
     input logic SCLK,
@@ -24,29 +24,42 @@ module system_controller (
 
     output logic heartbeat
 
-`ifndef SYNTHESIS
-    ,input logic debug_trigger
-`endif
+    `ifndef SYNTHESIS
+        ,input logic debug_trigger
+    `endif
 );
   //===================================================
   // Internal Signals
   //===================================================
-  logic rst_n;
   logic result_ready;
 
-  assign rst_n = rst_n_pin;
-
   // -------------- Debounch the switch ---------------------
-  logic sw_sync_0, sw_sync_1;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      sw_sync_0 <= 0;
-      sw_sync_1 <= 0;
-    end else begin
-      sw_sync_0 <= rst_n_sw_input;
-      sw_sync_1 <= sw_sync_0;
+  // logic sw_sync_0, sw_sync_1;
+  // always_ff @(posedge clk or negedge rst_n) begin
+  //   if (!rst_n) begin
+  //     sw_sync_0 <= 0;
+  //     sw_sync_1 <= 0;
+  //   end else begin
+  //     sw_sync_0 <= rst_n_sw_input;
+  //     sw_sync_1 <= sw_sync_0;
+  //   end
+  // end
+
+  // ----------------- Synchronous Reset -----------------
+  (* ASYNC_REG = "TRUE" *)logic rst_sync_ff1;
+  (* ASYNC_REG = "TRUE" *)logic rst_sync_ff2;
+  logic rst_n;
+
+  always_ff @(posedge clk or negedge rst_n_pin) begin
+    if (!rst_n_pin) begin  // async assertion
+      rst_sync_ff1 <= 1'b0;
+      rst_sync_ff2 <= 1'b0;
+    end else begin  // synchronous release
+      rst_sync_ff1 <= 1'b1;
+      rst_sync_ff2 <= rst_sync_ff1;
     end
   end
+  assign rst_n = rst_sync_ff2;  // use rst_n in all sub‑blocks
 
   // ---------------------- Cycle Counters ----------------------
 `ifndef SYNTHESIS
@@ -109,8 +122,6 @@ module system_controller (
       // $display("[TRACE][%0t] result_ready=%b  result_out=%0h  result_reg=%0h  seg_next=%b  seg=%b",
       //        $time, result_ready, result_out, result_reg, seg_next, seg);
     end
-
-    
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -229,7 +240,7 @@ module system_controller (
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
       .clk         (clk),
-      .rst_n       (rst_n),         // <<< added rst_n connection
+      .rst_n       (rst_n),    // <<< added rst_n connection
       .debug_enable(debug_trigger),
 
       // FSM

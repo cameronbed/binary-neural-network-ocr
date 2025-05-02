@@ -81,16 +81,19 @@ void send_digit(Vsystem_controller *dut, const std::vector<std::string> &digit, 
             if (flat[i + bit] == '1')
                 b |= (1 << bit);
         spi_send_byte(dut, b);
-        tick_main_clk(dut, 1);
+        tick_main_clk(dut, 2);
     }
 
     // Wait for BNN to consume
     check_fsm_state(dut, STATUS_BNN_BUSY, "STATUS_BNN_BUSY");
     while (dut->status_code_reg == STATUS_BNN_BUSY)
-        tick_main_clk(dut, 1);
+        tick_main_clk(dut, 3);
 
+    tick_main_clk(dut, 5);
     std::string decoded_seg = decode_seg(dut->seg);
     std::cout << "[TB IMG] 7-segment display for digit " << idx << ": " << decoded_seg << "\n";
+
+    tick_main_clk(dut, 6);
 
     // Check if the decoded value matches the expected digit
     if (decoded_seg != std::to_string(idx))

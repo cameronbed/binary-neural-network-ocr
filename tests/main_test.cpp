@@ -59,9 +59,12 @@ void test_spi_command_send(Vsystem_controller *dut)
 {
     std::cout << "[TEST] SPI COMMAND SEND\n";
     spi_send_byte(dut, 0xFE);
+
+    tick_main_clk(dut, 10);
+
     tick_main_clk(dut, 5);
 
-    tick_main_clk(dut, 2);
+    tick_main_clk(dut, 4);
 
     // Step 2: Check we are in WAIT_IMAGE (STATUS_RX_IMG_RDY)
     if (dut->status_code_reg != STATUS_RX_IMG_RDY)

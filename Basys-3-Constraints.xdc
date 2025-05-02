@@ -8,7 +8,7 @@ set_property -dict { PACKAGE_PIN W5   IOSTANDARD LVCMOS33 } [get_ports clk]
 
 
 ## Switches
-set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports rst_n_sw_input]
+# set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports rst_n_sw_input]
 #set_property -dict { PACKAGE_PIN V16   IOSTANDARD LVCMOS33 } [get_ports {sw[1]}]
 #set_property -dict { PACKAGE_PIN W16   IOSTANDARD LVCMOS33 } [get_ports {sw[2]}]
 #set_property -dict { PACKAGE_PIN W17   IOSTANDARD LVCMOS33 } [get_ports {sw[3]}]
@@ -38,17 +38,6 @@ set_property -dict { PACKAGE_PIN U7   IOSTANDARD LVCMOS33 } [get_ports {seg[6]}]
 # set_property -dict { PACKAGE_PIN U4   IOSTANDARD LVCMOS33 } [get_ports result_out[1]]
 # set_property -dict { PACKAGE_PIN V4   IOSTANDARD LVCMOS33 } [get_ports result_out[2]]
 # set_property -dict { PACKAGE_PIN W4   IOSTANDARD LVCMOS33 } [get_ports result_out[3]]
-
-
-##Pmod Header JA
-#set_property -dict { PACKAGE_PIN J1   IOSTANDARD LVCMOS33 } [get_ports {JA[0]}];#Sch name = JA1
-#set_property -dict { PACKAGE_PIN L2   IOSTANDARD LVCMOS33 } [get_ports {JA[1]}];#Sch name = JA2
-#set_property -dict { PACKAGE_PIN J2   IOSTANDARD LVCMOS33 } [get_ports {JA[2]}];#Sch name = JA3
-#set_property -dict { PACKAGE_PIN G2   IOSTANDARD LVCMOS33 } [get_ports {JA[3]}];#Sch name = JA4
-#set_property -dict { PACKAGE_PIN H1   IOSTANDARD LVCMOS33 } [get_ports {JA[4]}];#Sch name = JA7
-#set_property -dict { PACKAGE_PIN K2   IOSTANDARD LVCMOS33 } [get_ports {JA[5]}];#Sch name = JA8
-#set_property -dict { PACKAGE_PIN H2   IOSTANDARD LVCMOS33 } [get_ports {JA[6]}];#Sch name = JA9
-#set_property -dict { PACKAGE_PIN G3   IOSTANDARD LVCMOS33 } [get_ports {JA[7]}];#Sch name = JA10
 
 ##Pmod Header JB
 set_property -dict { PACKAGE_PIN A14   IOSTANDARD LVCMOS33 } [get_ports SCLK];#Sch name = JB1
@@ -84,38 +73,20 @@ set_property CONFIG_MODE SPIx4 [current_design]
 ## --------------------------
 
 # FPGA clock
-set clk_freq 50.0
-create_clock -name clk \
-             -period [expr 1000.0 / $clk_freq] \
-             [get_ports clk]
+create_clock -name clk -period 10.000 [get_ports clk]
 
-## ------------------------------------------------------------------------
-## dummy clock on the SPI clock pin (1 MHz)
-## ------------------------------------------------------------------------
-set spi_clk_period 2000.0   ;# 0.5 MHz = 2000 ns period
-create_clock -name sclk_async \
-             -period $spi_clk_period \
-             [get_ports SCLK]
-
-## ------------------------------------------------------------------------
-## sys_clk and sclk_async asynchronous (so no timing paths will be attempted between them)
-## ------------------------------------------------------------------------
+ 
+## ---- SPI dummy clock (asynchronous) ----
+set spi_clk_period 1000.0; # 1 MHz = 1000 ns
+create_clock -name sclk_async -period $spi_clk_period [get_ports SCLK]
 set_clock_groups -asynchronous \
     -group { [get_clocks clk] } \
     -group { [get_clocks sclk_async] }
 
-## ------------------------------------------------------------------------
-## 4) False-path any direct COPI / CS → sys_clk paths
-## ------------------------------------------------------------------------
-set_false_path -from [get_ports COPI]            -to [get_clocks clk]
-set_false_path -from [get_ports spi_cs_n]        -to [get_clocks clk]
-set_false_path -from [get_clocks sclk_async]     -to [get_clocks clk]
 
-# Optional: for async resets
-set_input_delay -clock [get_clocks clk] 0 [get_ports rst_n_pin]
-set_input_delay -clock [get_clocks clk] 0 [get_ports rst_n_sw_input]
+# 2‑FF synchroniser timing on FF1→FF2
+# set_property ASYNC_REG TRUE [get_cells {*rst_sync_ff*}]
 
-# OUTPUT DELAYS — assume outputs are checked 10ns after clock edge
-set_output_delay -clock [get_clocks clk] 10 [get_ports seg[*]]
-set_output_delay -clock [get_clocks clk] 10 [get_ports status_code_reg[*]]
-set_output_delay -clock [get_clocks clk] 10 [get_ports heartbeat]
+# Prevent any timing analysis on the external pin itself
+set_false_path -from [get_ports rst_n_pin]
+set_false_path -from [get_ports {COPI spi_cs_n}] -to [get_clocks clk]

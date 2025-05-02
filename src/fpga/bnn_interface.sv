@@ -66,7 +66,7 @@ module bnn_interface (
       data_in_ready_int <= 1'b0;
     end else begin
       // on the cycle we start (IDLE→INFERENCE) we latch
-      if (state == IDLE && img_buffer_full && bnn_enable) data_in_ready_int <= 1'b1;
+      if (img_buffer_full && bnn_enable) data_in_ready_int <= 1'b1;
       // hold it until the BNN finishes
       else if (result_ready_internal) data_in_ready_int <= 1'b0;
     end
@@ -87,7 +87,7 @@ module bnn_interface (
     next_state = state;
     case (state)
       IDLE: begin
-        if (img_buffer_full && data_in_ready_int) next_state = INFERENCE;
+        if (data_in_ready_int) next_state = INFERENCE;
       end
 
       INFERENCE: begin
