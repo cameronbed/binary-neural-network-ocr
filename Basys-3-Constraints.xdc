@@ -92,7 +92,7 @@ create_clock -name clk \
 ## ------------------------------------------------------------------------
 ## dummy clock on the SPI clock pin (1 MHz)
 ## ------------------------------------------------------------------------
-set spi_clk_period 500.0   ;# 1 MHz → 1000 ns
+set spi_clk_period 2000.0   ;# 0.5 MHz = 2000 ns period
 create_clock -name sclk_async \
              -period $spi_clk_period \
              [get_ports SCLK]
@@ -101,21 +101,21 @@ create_clock -name sclk_async \
 ## sys_clk and sclk_async asynchronous (so no timing paths will be attempted between them)
 ## ------------------------------------------------------------------------
 set_clock_groups -asynchronous \
-    -group { [get_clocks sys_clk] } \
+    -group { [get_clocks clk] } \
     -group { [get_clocks sclk_async] }
 
 ## ------------------------------------------------------------------------
 ## 4) False-path any direct COPI / CS → sys_clk paths
 ## ------------------------------------------------------------------------
-set_false_path -from [get_ports COPI]            -to [get_clocks sys_clk]
-set_false_path -from [get_ports spi_cs_n]        -to [get_clocks sys_clk]
-set_false_path -from [get_clocks sclk_async]     -to [get_clocks sys_clk]
+set_false_path -from [get_ports COPI]            -to [get_clocks clk]
+set_false_path -from [get_ports spi_cs_n]        -to [get_clocks clk]
+set_false_path -from [get_clocks sclk_async]     -to [get_clocks clk]
 
 # Optional: for async resets
-set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_pin]
-set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_sw_input]
+set_input_delay -clock [get_clocks clk] 0 [get_ports rst_n_pin]
+set_input_delay -clock [get_clocks clk] 0 [get_ports rst_n_sw_input]
 
 # OUTPUT DELAYS — assume outputs are checked 10ns after clock edge
-set_output_delay -clock [get_clocks sys_clk] 10 [get_ports seg[*]]
-set_output_delay -clock [get_clocks sys_clk] 10 [get_ports status_code_reg[*]]
-set_output_delay -clock [get_clocks sys_clk] 10 [get_ports heartbeat]
+set_output_delay -clock [get_clocks clk] 10 [get_ports seg[*]]
+set_output_delay -clock [get_clocks clk] 10 [get_ports status_code_reg[*]]
+set_output_delay -clock [get_clocks clk] 10 [get_ports heartbeat]

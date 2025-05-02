@@ -496,12 +496,12 @@ void test_image_buffer(Vsystem_controller *dut)
     tick_main_clk(dut, 5);
     debug(dut);
 
-    // for (size_t idx = 0; idx < all_digits.size(); ++idx)
-    // {
-    //     send_digit(dut, all_digits[idx], idx);
-    // }
+    for (size_t idx = 0; idx < all_digits.size(); ++idx)
+    {
+        send_digit(dut, all_digits[idx], idx);
+    }
 
-    // send_digit(dut, digit_8, 0); // Test digit 0 again
+    send_digit(dut, digit_8, 0); // Test digit 0 again
 
     std::cout << "[TB IMG] ✅ Image buffer and FSM behavior passed\n";
 }

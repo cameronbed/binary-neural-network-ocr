@@ -157,6 +157,7 @@ module controller_fsm (
       S_IMG_RX: begin
         rx_enable = 1;
         if (buffer_full_sync) begin
+          bnn_enable = 1;
           next_state = S_WAIT_FOR_BNN;
           next_status_code_reg = STATUS_BNN_BUSY;
 
@@ -176,8 +177,8 @@ module controller_fsm (
       end
 
       S_WAIT_FOR_BNN: begin
-        bnn_enable = 1;
-        rx_enable  = 1;
+        //bnn_enable = 1;
+        rx_enable = 1;
 
         if (result_ready) begin
           next_state = S_RESULT_RDY;
