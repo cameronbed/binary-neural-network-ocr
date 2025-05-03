@@ -57,12 +57,27 @@ module bnn_interface (
 
   // assign result_out = lfsr % 10;  // Random number between 0-9
   // assign result_ready_internal = bnn_enable;  // Simulate ready signal
+
+  // ==================== Latch data_in_ready
+  logic data_in_ready_int;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      data_in_ready_int <= 1'b0;
+    end else begin
+      // on the cycle we start (IDLE→INFERENCE) we latch
+      if (img_buffer_full && bnn_enable) data_in_ready_int <= 1'b1;
+      // hold it until the BNN finishes
+      else if (result_ready_internal) data_in_ready_int <= 1'b0;
+    end
+  end
+
   // ======================= END MOCK MODULE
 
   bnn_top u_bnn_top (
       .clk(clk),
       .conv1_img_in('{img_in_truncated}),
-      .data_in_ready(bnn_enable),
+      .data_in_ready(data_in_ready_int),
       .result(result_out),
       .data_out_ready(result_ready_internal)
   );
@@ -72,7 +87,7 @@ module bnn_interface (
     next_state = state;
     case (state)
       IDLE: begin
-        if (img_buffer_full && bnn_enable) next_state = INFERENCE;
+        if (data_in_ready_int) next_state = INFERENCE;
       end
 
       INFERENCE: begin
@@ -103,7 +118,10 @@ module bnn_interface (
 
         INFERENCE: begin
           if (result_ready_internal == 1) begin
+            $display("[BNN_INTERFACE] @%0t result=%0d", $time, result_out);
             result_ready <= 1'd1;
+          end else begin
+            result_ready <= 1'b0;  // hold ready until result is available
           end
         end
 
@@ -115,7 +133,9 @@ module bnn_interface (
           end
         end
 
-        default: result_ready <= 1'b0;
+        default: begin
+          result_ready <= 1'b0;
+        end
       endcase
     end
   end

@@ -6,9 +6,8 @@ module image_buffer (
     input logic clear_buffer,
     input logic [7:0] data_in,
 
-    input logic write_request,
+    input  logic write_request,
     output logic write_ready,
-    output logic [6:0] write_addr,
 
     output logic buffer_full,
     output logic buffer_empty,
@@ -65,7 +64,6 @@ module image_buffer (
   assign write_ready  = (write_addr_internal < IMG_BYTE_SIZE);
   assign buffer_full  = (next_addr_ff >= IMG_BYTE_SIZE);
   assign buffer_empty = (write_addr_internal == 0);
-  assign write_addr   = write_addr_internal;
   // assign img_out = img_buffer;
 
 endmodule

@@ -8,7 +8,7 @@ set_property -dict { PACKAGE_PIN W5   IOSTANDARD LVCMOS33 } [get_ports clk]
 
 
 ## Switches
-set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports rst_n_sw_input]
+# set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports rst_n_sw_input]
 #set_property -dict { PACKAGE_PIN V16   IOSTANDARD LVCMOS33 } [get_ports {sw[1]}]
 #set_property -dict { PACKAGE_PIN W16   IOSTANDARD LVCMOS33 } [get_ports {sw[2]}]
 #set_property -dict { PACKAGE_PIN W17   IOSTANDARD LVCMOS33 } [get_ports {sw[3]}]
@@ -38,17 +38,6 @@ set_property -dict { PACKAGE_PIN U7   IOSTANDARD LVCMOS33 } [get_ports {seg[6]}]
 # set_property -dict { PACKAGE_PIN U4   IOSTANDARD LVCMOS33 } [get_ports result_out[1]]
 # set_property -dict { PACKAGE_PIN V4   IOSTANDARD LVCMOS33 } [get_ports result_out[2]]
 # set_property -dict { PACKAGE_PIN W4   IOSTANDARD LVCMOS33 } [get_ports result_out[3]]
-
-
-##Pmod Header JA
-#set_property -dict { PACKAGE_PIN J1   IOSTANDARD LVCMOS33 } [get_ports {JA[0]}];#Sch name = JA1
-#set_property -dict { PACKAGE_PIN L2   IOSTANDARD LVCMOS33 } [get_ports {JA[1]}];#Sch name = JA2
-#set_property -dict { PACKAGE_PIN J2   IOSTANDARD LVCMOS33 } [get_ports {JA[2]}];#Sch name = JA3
-#set_property -dict { PACKAGE_PIN G2   IOSTANDARD LVCMOS33 } [get_ports {JA[3]}];#Sch name = JA4
-#set_property -dict { PACKAGE_PIN H1   IOSTANDARD LVCMOS33 } [get_ports {JA[4]}];#Sch name = JA7
-#set_property -dict { PACKAGE_PIN K2   IOSTANDARD LVCMOS33 } [get_ports {JA[5]}];#Sch name = JA8
-#set_property -dict { PACKAGE_PIN H2   IOSTANDARD LVCMOS33 } [get_ports {JA[6]}];#Sch name = JA9
-#set_property -dict { PACKAGE_PIN G3   IOSTANDARD LVCMOS33 } [get_ports {JA[7]}];#Sch name = JA10
 
 ##Pmod Header JB
 set_property -dict { PACKAGE_PIN A14   IOSTANDARD LVCMOS33 } [get_ports SCLK];#Sch name = JB1
@@ -83,23 +72,21 @@ set_property CONFIG_MODE SPIx4 [current_design]
 ## Timing Constraints Section
 ## --------------------------
 
-# Reference clock (your FPGA clock)
-set clk_freq 50.0
-create_clock -name sys_clk -period [expr 1000.0 / $clk_freq] [get_ports clk]
+# FPGA clock
+create_clock -name clk -period 10.000 [get_ports clk]
 
-# SPI clock period (1 MHz = 1000 ns period)
-set spi_clk_period 1000.0
+ 
+## ---- SPI dummy clock (asynchronous) ----
+set spi_clk_period 1000.0; # 1 MHz = 1000 ns
+create_clock -name sclk_async -period $spi_clk_period [get_ports SCLK]
+set_clock_groups -asynchronous \
+    -group { [get_clocks clk] } \
+    -group { [get_clocks sclk_async] }
 
-# INPUT DELAYS — assume data arrives in middle of SPI clock cycle
-set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports COPI]
-set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports SCLK]
-set_input_delay -clock [get_clocks sys_clk] [expr $spi_clk_period * 0.5] [get_ports spi_cs_n]
 
-# Optional: for async resets
-set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_pin]
-set_input_delay -clock [get_clocks sys_clk] 0 [get_ports rst_n_sw_input]
+# 2‑FF synchroniser timing on FF1→FF2
+# set_property ASYNC_REG TRUE [get_cells {*rst_sync_ff*}]
 
-# OUTPUT DELAYS — assume outputs are checked 10ns after clock edge
-set_output_delay -clock [get_clocks sys_clk] 10 [get_ports seg[*]]
-set_output_delay -clock [get_clocks sys_clk] 10 [get_ports status_code_reg[*]]
-set_output_delay -clock [get_clocks sys_clk] 10 [get_ports heartbeat]
+# Prevent any timing analysis on the external pin itself
+set_false_path -from [get_ports rst_n_pin]
+set_false_path -from [get_ports {COPI spi_cs_n}] -to [get_clocks clk]
