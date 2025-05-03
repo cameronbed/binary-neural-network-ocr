@@ -48,12 +48,35 @@ module bnn_interface (
     end
   end
 
-  // ----------------- BNN Module Instantiation -----------------
+  // ==================== Latch data_in_ready
+  logic data_in_ready_int;
 
-  // ======================= MOCK MODULE
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      data_in_ready_int <= 1'b0;
+
+    end else begin
+      if (img_buffer_full && bnn_enable) data_in_ready_int <= 1'b1;
+
+      else if (result_ready_internal) begin
+        result_out <= result_out_internal;
+        data_in_ready_int <= 1'b0;
+      end
+    end
+  end
+
+  // ----------------- BNN Module Instantiation -----------------
+  bnn_top u_bnn_top (
+      .clk(clk),
+      .conv1_img_in('{img_in_truncated}),
+      .data_in_ready(data_in_ready_int),
+      .result(result_out_internal),
+      .data_out_ready(result_ready_internal)
+  );
+
+  // ======================= MOCK MODULE ========================
   // Mock behavior: Generate a pseudo-random result based on img_in_truncated
   // logic [3:0] lfsr;
-
   // always_ff @(posedge clk or negedge rst_n) begin
   //   if (!rst_n) begin
   //     lfsr <= 4'b0001;  // Initialize LFSR
@@ -62,33 +85,9 @@ module bnn_interface (
   //     lfsr <= {lfsr[2:0], ^(lfsr[3:2] ^ img_in_truncated[0])};
   //   end
   // end
-
   // assign result_out = lfsr % 10;  // Random number between 0-9
   // assign result_ready_internal = bnn_enable;  // Simulate ready signal
-
-  // ==================== Latch data_in_ready
-  logic data_in_ready_int;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      data_in_ready_int <= 1'b0;
-    end else begin
-      // on the cycle we start (IDLE→INFERENCE) we latch
-      if (img_buffer_full && bnn_enable) data_in_ready_int <= 1'b1;
-      // hold it until the BNN finishes
-      else if (result_ready_internal) data_in_ready_int <= 1'b0;
-    end
-  end
-
-  // ======================= END MOCK MODULE
-
-  bnn_top u_bnn_top (
-      .clk(clk),
-      .conv1_img_in('{img_in_truncated}),
-      .data_in_ready(data_in_ready_int),
-      .result(result_out),
-      .data_out_ready(result_ready_internal)
-  );
+  // ======================= END MOCK MODULE =========================
 
   // ----------------------- FSM Next-State Logic ----------------------
   always_comb begin

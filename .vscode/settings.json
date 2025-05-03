@@ -9,7 +9,7 @@
     "verilog.linting.linter": "verilator",
     "verilog.ctags.path": "/home/camer/ctags/ctags",
     "github.copilot.enable": {
-        "*": true,
+        "*": false,
         "plaintext": true,
         "markdown": false,
         "scminput": false
