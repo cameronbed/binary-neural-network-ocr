@@ -23,20 +23,23 @@ module ConvCore#(
 
     logic signed [7:0] popcount;
     integer cur_ic, row, col, adder_count;
+    integer img_ind[0:8];
+    integer weights_ind[0:8];
 
     logic signed [7:0] patch_val;
     always_comb begin
     case (adder_count)
-        0: patch_val = (img_in[cur_ic][row*IMG_IN_SIZE+col] == weights[cur_ic*9 + 0]) ? 8'sh01 : 8'shFF;
-        1: patch_val = (img_in[cur_ic][row*IMG_IN_SIZE+col+1] == weights[cur_ic*9 + 1]) ? 8'sh01 : 8'shFF;
-        2: patch_val = (img_in[cur_ic][row*IMG_IN_SIZE+col+2] == weights[cur_ic*9+2])?8'sh01 : 8'shFF;
-        3: patch_val = (img_in[cur_ic][(row+1)*IMG_IN_SIZE+col] == weights[cur_ic*9+3])?8'sh01 : 8'shFF;
-        4: patch_val = (img_in[cur_ic][(row+1)*IMG_IN_SIZE+col+1] == weights[cur_ic*9+4])?8'sh01 : 8'shFF;
-        5: patch_val = (img_in[cur_ic][(row+1)*IMG_IN_SIZE+col+2] == weights[cur_ic*9+5])?8'sh01 : 8'shFF;
-        6: patch_val = (img_in[cur_ic][(row+2)*IMG_IN_SIZE+col] == weights[cur_ic*9+6])?8'sh01 : 8'shFF;
-        7: patch_val = (img_in[cur_ic][(row+2)*IMG_IN_SIZE+col+1] == weights[cur_ic*9+7])?8'sh01 : 8'shFF;
-        8: patch_val = (img_in[cur_ic][(row+2)*IMG_IN_SIZE+col+2] == weights[cur_ic*9 + 8]) ? 8'sh01 : 8'shFF;
-        default:    patch_val = 0;
+        0: patch_val = (img_in[cur_ic][img_ind[0]] == weights[weights_ind[0]])?8'sh01 : 8'shFF;
+        1: patch_val = (img_in[cur_ic][img_ind[1]] == weights[weights_ind[1]])?8'sh01 : 8'shFF;
+        2: patch_val = (img_in[cur_ic][img_ind[2]] == weights[weights_ind[2]])?8'sh01 : 8'shFF;
+        3: patch_val = (img_in[cur_ic][img_ind[3]] == weights[weights_ind[3]])?8'sh01 : 8'shFF;
+        4: patch_val = (img_in[cur_ic][img_ind[4]] == weights[weights_ind[4]])?8'sh01 : 8'shFF;
+        5: patch_val = (img_in[cur_ic][img_ind[5]] == weights[weights_ind[5]])?8'sh01 : 8'shFF;
+        6: patch_val = (img_in[cur_ic][img_ind[6]] == weights[weights_ind[6]])?8'sh01 : 8'shFF;
+        7: patch_val = (img_in[cur_ic][img_ind[7]] == weights[weights_ind[7]])?8'sh01 : 8'shFF;
+        8: patch_val = (img_in[cur_ic][img_ind[8]] == weights[weights_ind[8]])?8'sh01 : 8'shFF;
+        default: 
+           patch_val = 0;
     endcase
     end
 
@@ -72,10 +75,28 @@ module ConvCore#(
                     end
                     else begin
                         col <= col + 1;
+                        img_ind[0] <= row*IMG_IN_SIZE+col;
+                        img_ind[1] <= row*IMG_IN_SIZE+col+1;
+                        img_ind[2] <= row*IMG_IN_SIZE+col+2;
+                        img_ind[3] <= (row+1)*IMG_IN_SIZE+col;
+                        img_ind[4] <= (row+1)*IMG_IN_SIZE+col+1;
+                        img_ind[5] <= (row+1)*IMG_IN_SIZE+col+2;
+                        img_ind[6] <= (row+2)*IMG_IN_SIZE+col;
+                        img_ind[7] <= (row+2)*IMG_IN_SIZE+col+1;
+                        img_ind[8] <= (row+2)*IMG_IN_SIZE+col+2;
                     end
                 end
                 else begin
                     cur_ic <= cur_ic + 1;
+                    weights_ind[0] <= cur_ic*9;
+                    weights_ind[1] <= cur_ic*9+1;
+                    weights_ind[2] <= cur_ic*9+2;
+                    weights_ind[3] <= cur_ic*9+3;
+                    weights_ind[4] <= cur_ic*9+4;
+                    weights_ind[5] <= cur_ic*9+5;
+                    weights_ind[6] <= cur_ic*9+6;
+                    weights_ind[7] <= cur_ic*9+7;
+                    weights_ind[8] <= cur_ic*9+8;
                 end
             end
             else begin
