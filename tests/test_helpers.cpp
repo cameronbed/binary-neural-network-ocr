@@ -15,14 +15,14 @@ void sclk_rise(Vsystem_controller *dut)
 {
     dut->SCLK = 1;
     dut->eval();
-    tick_main_clk(dut, 2); // Hold SCLK high for setup/sample
+    tick_main_clk(dut, 5); // Hold SCLK high for setup/sample
 }
 
 void sclk_fall(Vsystem_controller *dut)
 {
     dut->SCLK = 0;
     dut->eval();
-    tick_main_clk(dut, 2); // Hold SCLK low after sample
+    tick_main_clk(dut, 5); // Hold SCLK low after sample
 }
 
 void tick_main_clk(Vsystem_controller *dut, int cycles)
@@ -44,7 +44,7 @@ void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
 
     dut->spi_cs_n = 0; // Start transaction
     dut->eval();
-    tick_main_clk(dut, 5); // Setup time after CS_N falling
+    tick_main_clk(dut, 7); // Setup time after CS_N falling
 
     if (VERBOSE)
     {
@@ -67,7 +67,7 @@ void spi_send_byte(Vsystem_controller *dut, uint8_t byte_val)
             debug(dut);
     }
 
-    tick_main_clk(dut, 5);
+    tick_main_clk(dut, 7);
 
     dut->spi_cs_n = 1; // End transaction
     dut->eval();
@@ -93,7 +93,7 @@ void do_reset(Vsystem_controller *dut)
     if (!dut)
         throw std::invalid_argument("do_reset: DUT pointer is null!");
 
-    int cycles = 1;
+    int cycles = 4;
 
     dut->rst_n_pin = 0;         // Assert reset
     tick_main_clk(dut, cycles); // Tick system clock during reset
@@ -117,13 +117,13 @@ void debug(Vsystem_controller *dut)
         return;
 
     dut->debug_trigger = 1; // Assert debug_trigger
-    tick_main_clk(dut, 2);
+    tick_main_clk(dut, 5);
 
     // Debug output for debug trigger
     std::cout << "[DEBUG TRIGGER]: Trigger asserted at time " << main_clk_ticks << "\n";
 
     dut->debug_trigger = 0; // Deassert debug_trigger
-    tick_main_clk(dut, 2);  // Allow signal to settle
+    tick_main_clk(dut, 5);  // Allow signal to settle
 
     std::cout << "[DEBUG TRIGGER]: Trigger deasserted at time " << main_clk_ticks << "\n";
 }

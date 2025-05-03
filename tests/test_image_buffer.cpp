@@ -169,6 +169,8 @@ void test_image_buffer(Vsystem_controller *dut)
 
     debug(dut);
 
+    tick_main_clk(dut, 4);
+
     check_fsm_state(dut, STATUS_IDLE, "STATUS_IDLE");
 
     std::vector<std::string> digit_0 = {

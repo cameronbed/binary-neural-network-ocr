@@ -24,6 +24,9 @@ module image_buffer (
   logic [6:0] write_addr_internal;
   logic [6:0] next_addr_ff;
 
+  logic buffer_empty_reg;
+
+
   //===================================================
   // Write Logic + next‐addr tracking
   //===================================================
@@ -31,9 +34,11 @@ module image_buffer (
     if (!rst_n) begin
       write_addr_internal <= 7'd0;
       next_addr_ff        <= 7'd0;
+      buffer_empty_reg    <= 1'b1;
     end else if (clear_buffer) begin
       write_addr_internal <= 7'd0;
       next_addr_ff        <= 7'd0;
+      buffer_empty_reg    <= 1'b1;
     end else begin
       next_addr_ff <= write_addr_internal;
 
@@ -44,6 +49,8 @@ module image_buffer (
 
         next_addr_ff <= write_addr_internal + 1;
       end
+
+      buffer_empty_reg <= (write_addr_internal == 0);
     end
   end
 
@@ -62,6 +69,6 @@ module image_buffer (
   //===================================================
   assign write_ready  = (write_addr_internal < IMG_BYTE_SIZE);
   assign buffer_full  = (next_addr_ff >= IMG_BYTE_SIZE);
-  assign buffer_empty = (write_addr_internal == 0);
+  assign buffer_empty = buffer_empty_reg;
 
 endmodule

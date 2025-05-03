@@ -64,8 +64,6 @@ void test_spi_command_send(Vsystem_controller *dut)
 
     tick_main_clk(dut, 5);
 
-    tick_main_clk(dut, 4);
-
     // Step 2: Check we are in WAIT_IMAGE (STATUS_RX_IMG_RDY)
     if (dut->status_code_reg != STATUS_RX_IMG_RDY)
     {
@@ -79,7 +77,7 @@ void test_spi_command_send(Vsystem_controller *dut)
     spi_send_byte(dut, 0x00); // First image data byte
     tick_main_clk(dut, 5);
 
-    tick_main_clk(dut, 2);
+    tick_main_clk(dut, 5);
 
     if (dut->status_code_reg == STATUS_RX_IMG)
     {
@@ -102,7 +100,7 @@ void test_buffer_write(Vsystem_controller *dut)
 
     // Step 2: Send the CMD_IMG_SEND_REQUEST command to transition to S_WAIT_IMAGE
     spi_send_byte(dut, 0xFE); // CMD_IMG_SEND_REQUEST
-    tick_main_clk(dut, 5);
+    tick_main_clk(dut, 15);
 
     assert(dut->status_code_reg == STATUS_RX_IMG_RDY);
     std::cout << "✅ [PASS] FSM moved to STATUS_RX_IMG_RDY\n";
@@ -143,13 +141,15 @@ void test_image_buffer_module(Vsystem_controller *dut)
     // --- Reset ---
     do_reset(dut);
 
+    tick_main_clk(dut, 10);
+
     // After reset: Check status_code_reg is STATUS_IDLE
     assert(dut->status_code_reg == STATUS_IDLE);
     std::cout << "[PASS] Reset ⇒ STATUS_IDLE\n";
 
     // --- Send CMD_IMG_SEND_REQUEST to transition to S_WAIT_IMAGE ---
     spi_send_byte(dut, 0xFE); // CMD_IMG_SEND_REQUEST
-    tick_main_clk(dut, 5);
+    tick_main_clk(dut, 10);
 
     // Check FSM state is STATUS_RX_IMG_RDY
     assert(dut->status_code_reg == STATUS_RX_IMG_RDY);
@@ -160,7 +160,7 @@ void test_image_buffer_module(Vsystem_controller *dut)
     for (int i = 0; i < 3; i++)
     {
         spi_send_byte(dut, seq1[i]);
-        tick_main_clk(dut, 5);
+        tick_main_clk(dut, 15);
 
         // Check FSM state is STATUS_RX_IMG
         assert(dut->status_code_reg == STATUS_RX_IMG);
@@ -169,7 +169,7 @@ void test_image_buffer_module(Vsystem_controller *dut)
 
     // --- Clear the buffer ---
     spi_send_byte(dut, 0xFD); // CMD_CLEAR
-    tick_main_clk(dut, 5);
+    tick_main_clk(dut, 7);
 
     // debug(dut);
 

@@ -54,6 +54,9 @@ module controller_fsm (
   fsm_state_t current_state, next_state;
 
   logic [3:0] next_status_code_reg;
+
+  logic [3:0] status_code_reg_ff1, status_code_reg_ff2;
+
   logic [6:0] buffer_write_addr_int;
 
   logic byte_taken_comb;
@@ -67,7 +70,7 @@ module controller_fsm (
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       current_state <= S_IDLE;
-      status_code_reg <= STATUS_IDLE;
+      status_code_reg_ff1 <= STATUS_IDLE;
       buffer_write_addr_int <= 0;
       byte_taken <= 0;
       prev_spi_byte_valid <= 0;
@@ -75,7 +78,10 @@ module controller_fsm (
 
     end else begin
       current_state       <= next_state;
-      status_code_reg     <= next_status_code_reg;
+
+      status_code_reg_ff1 <= next_status_code_reg;
+      status_code_reg_ff2 <= status_code_reg_ff1;
+
       byte_taken          <= byte_taken_comb;
       prev_spi_byte_valid <= spi_byte_valid;
       buffer_full_sync    <= buffer_full;
@@ -87,6 +93,7 @@ module controller_fsm (
     end
   end
 
+  assign status_code_reg = status_code_reg_ff2;
   assign new_spi_byte = spi_byte_valid && !prev_spi_byte_valid;
 
   //===================================================
@@ -102,11 +109,12 @@ module controller_fsm (
     buffer_write_request = 0;
 
     next_state = current_state;
-    next_status_code_reg = status_code_reg;
+    next_status_code_reg = status_code_reg_ff2;
 
     case (current_state)
       S_IDLE: begin
         rx_enable = 1;
+        next_status_code_reg = STATUS_IDLE;
 
         if (buffer_full_sync) begin
           next_state = S_WAIT_FOR_BNN;
@@ -135,6 +143,8 @@ module controller_fsm (
 
       S_WAIT_IMAGE: begin
         rx_enable = 1;
+        next_status_code_reg = STATUS_RX_IMG_RDY;
+
         if (new_spi_byte) begin
           if (spi_byte_valid) begin
             next_state           = S_IMG_RX;
@@ -148,6 +158,8 @@ module controller_fsm (
 
       S_IMG_RX: begin
         rx_enable = 1;
+        next_status_code_reg = STATUS_RX_IMG;
+
         if (buffer_full_sync) begin
           bnn_enable = 1;
           next_state = S_WAIT_FOR_BNN;
@@ -164,13 +176,14 @@ module controller_fsm (
             buffer_write_request = 1;
             buffer_write_data = spi_rx_data;
             byte_taken_comb = 1;
+            next_status_code_reg = STATUS_RX_IMG;
           end
         end
       end
 
       S_WAIT_FOR_BNN: begin
-        //bnn_enable = 1;
         rx_enable = 1;
+        next_status_code_reg = STATUS_BNN_BUSY;
 
         if (result_ready) begin
           next_state = S_RESULT_RDY;
@@ -188,6 +201,8 @@ module controller_fsm (
 
       S_RESULT_RDY: begin
         rx_enable = 1;
+        next_status_code_reg = STATUS_RESULT_RDY;
+
         if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
           next_state = S_CLEAR;
           next_status_code_reg = STATUS_IDLE;

@@ -78,23 +78,42 @@ create_clock -name clk -period 10.000 [get_ports clk]
 ## ---- SPI dummy clock (asynchronous) ----
 set spi_clk_period 1000.0; # 1 MHz = 1000 ns
 create_clock -name sclk_async -period $spi_clk_period [get_ports SCLK]
-#set_clock_groups -asynchronous \
-#    -group { [get_clocks clk] } \
-#    -group { [get_clocks sclk_async] }
+set_clock_groups -asynchronous -group [get_clocks clk] -group [get_clocks sclk_async]
 
 
-# Prevent any timing analysis on the external pin itself
-set_false_path -from [get_ports rst_n_pin]
-set_false_path -from [get_ports {COPI spi_cs_n}] -to [get_clocks clk]
+# Define output delay for seg[0] to seg[6]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[0]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[1]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[2]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[3]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[4]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[5]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[6]}]
 
-# The seven‑segment display and status LEDs update only once per classification
-# → they may take two full system cycles to settle.
-#set_multicycle_path 2 \
-#    -from [get_cells -hierarchical *u_bnn_interface*] \
-#    -to   [get_ports {seg[*] status_code_reg[*]}] \
-#    -setup
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[0]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[1]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[2]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[3]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[4]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[5]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[6]}]
 
-#set_multicycle_path 1 \
-#    -from [get_cells -hierarchical *u_bnn_interface*] \
-#    -to   [get_ports {seg[*] status_code_reg[*]}] \
-#    -hold
+# Define output delay for status code bits
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[0]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[1]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[2]}]
+set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[3]}]
+
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[0]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[1]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[2]}]
+set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[3]}]
+
+set_input_delay -max 10 -clock [get_clocks sclk_async] [get_ports COPI]
+set_input_delay -min 0 -clock [get_clocks sclk_async] [get_ports COPI]
+
+set_input_delay -max 10 -clock [get_clocks sclk_async] [get_ports spi_cs_n]
+set_input_delay -min 0 -clock [get_clocks sclk_async] [get_ports spi_cs_n]
+
+set_input_delay -max 10 -clock [get_clocks clk] [get_ports rst_n_pin]
+set_input_delay -min 0  -clock [get_clocks clk] [get_ports rst_n_pin]
