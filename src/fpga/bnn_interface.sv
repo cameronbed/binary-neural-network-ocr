@@ -28,12 +28,14 @@ module bnn_interface (
 
   logic [899:0] img_to_bnn[0:0];
   assign img_to_bnn[0] = img_in[903:4];
+  logic [899:0] img_to_bnn_stage1[0:0];
+  logic [899:0] img_to_bnn_stage2[0:0];
 
-  logic [899:0] img_to_bnn_ff1[0:0];
-  logic [899:0] img_to_bnn_ff2[0:0];
-  logic data_in_ready_ff1, data_in_ready_ff2;
-  logic result_ready_ff1, result_ready_ff2;
-  logic [3:0] result_out_ff1, result_out_ff2;
+  logic data_in_ready_stage1, data_in_ready_stage2;
+
+  logic result_ready_stage1, result_ready_stage2;
+
+  logic [3:0] result_out_stage1, result_out_stage2;
 
   logic data_in_ready_int;
   logic result_ready_internal;
@@ -48,45 +50,57 @@ module bnn_interface (
     end
   end
 
+  (* USE_DSP = "no", SHREG_EXTRACT = "no" *) logic [1:0] clk_div;
+  logic bnn_clk_en;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) clk_div <= 0;
+    else clk_div <= clk_div + 1;
+  end
+
+  assign bnn_clk_en = (clk_div == 2'b00);
+
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      img_to_bnn_ff1[0] <= '0;
-      img_to_bnn_ff2[0] <= '0;
-
-      data_in_ready_ff1 <= 1'b0;
-      data_in_ready_ff2 <= 1'b0;
-
-      result_out_ff1    <= 4'b0;
-      result_out_ff2    <= 4'b0;
-    end else begin
-      // Data pipeline
-      img_to_bnn_ff1[0] <= img_to_bnn[0];
-      img_to_bnn_ff2[0] <= img_to_bnn_ff1[0];
-
-      // Control pipeline
-      data_in_ready_ff1 <= data_in_ready_int;
-      data_in_ready_ff2 <= data_in_ready_ff1;
-
-      // Result pipeline (output of BNN)
-      if (result_ready_internal) begin
-        result_out_ff1   <= result_out_reg;
-        result_ready_ff1 <= 1'b1;
-      end else begin
-        result_ready_ff1 <= 1'b0;
-      end
-
-      result_out_ff2   <= result_out_ff1;
-      result_ready_ff2 <= result_ready_ff1;
+      img_to_bnn_stage1[0] <= '0;
+      img_to_bnn_stage2[0] <= '0;
+      data_in_ready_stage1 <= 1'b0;
+      data_in_ready_stage2 <= 1'b0;
+    end else if (bnn_clk_en) begin
+      img_to_bnn_stage1[0] <= img_to_bnn[0];
+      img_to_bnn_stage2[0] <= img_to_bnn_stage1[0];
+      data_in_ready_stage1 <= data_in_ready_int;
+      data_in_ready_stage2 <= data_in_ready_stage1;
     end
   end
 
-  assign result_out = result_out_ff2;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      result_out_stage1   <= 4'b0;
+      result_out_stage2   <= 4'b0;
+      result_ready_stage1 <= 1'b0;
+      result_ready_stage2 <= 1'b0;
+    end else begin
+      result_ready_stage1 <= result_ready_internal;
+      result_ready_stage2 <= result_ready_stage1;
+
+      if (result_ready_internal) begin
+        result_out_stage1   <= result_out_reg;
+        result_ready_stage1 <= 1'b1;
+      end else begin
+        result_ready_stage1 <= 1'b0;
+      end
+
+      result_out_stage2   <= result_out_stage1;
+      result_ready_stage2 <= result_ready_stage1;
+    end
+  end
 
   // ----------------- BNN Module Instantiation -----------------
   bnn_top u_bnn_top (
       .clk           (clk),
-      .conv1_img_in  (img_to_bnn_ff2),
-      .data_in_ready (data_in_ready_ff2),
+      .conv1_img_in  (img_to_bnn_stage2),
+      .data_in_ready (data_in_ready_stage2),
       .result        (result_out_reg),
       .data_out_ready(result_ready_internal)
   );
