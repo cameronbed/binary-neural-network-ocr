@@ -31,18 +31,17 @@ module image_buffer (
     if (!rst_n) begin
       write_addr_internal <= 7'd0;
       next_addr_ff        <= 7'd0;
-      // img_buffer          <= '0;
     end else if (clear_buffer) begin
       write_addr_internal <= 7'd0;
       next_addr_ff        <= 7'd0;
-      // img_buffer          <= '0;
     end else begin
-      // default: don’t advance pointer
       next_addr_ff <= write_addr_internal;
 
       if (write_request && (write_addr_internal < IMG_BYTE_SIZE)) begin
         image_buffer[write_addr_internal] <= data_in;
+
         write_addr_internal <= write_addr_internal + 1;
+
         next_addr_ff <= write_addr_internal + 1;
       end
     end
@@ -64,6 +63,5 @@ module image_buffer (
   assign write_ready  = (write_addr_internal < IMG_BYTE_SIZE);
   assign buffer_full  = (next_addr_ff >= IMG_BYTE_SIZE);
   assign buffer_empty = (write_addr_internal == 0);
-  // assign img_out = img_buffer;
 
 endmodule

@@ -93,7 +93,7 @@ module controller_fsm (
   // FSM State
   //===================================================
   always_comb begin
-    byte_taken_comb = 0;  // default
+    byte_taken_comb = 0;
     rx_enable = 0;
     buffer_write_data = 0;
     buffer_write_addr = buffer_write_addr_int;
@@ -103,14 +103,6 @@ module controller_fsm (
 
     next_state = current_state;
     next_status_code_reg = status_code_reg;
-
-    // Debug print for state transitions or new SPI byte
-    // if (current_state != next_state) begin
-    //   $display("[DEBUG][FSM] Cycle: %0d, FSM State Transition: %s -> %s", main_cycle_cnt,
-    //            current_state.name(), next_state.name());
-    // end else if (new_spi_byte) begin
-    //   $display("[DEBUG][FSM] Cycle: %0d, New SPI Byte Received: %h", main_cycle_cnt, spi_rx_data);
-    // end
 
     case (current_state)
       S_IDLE: begin

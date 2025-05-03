@@ -38,7 +38,15 @@ module bnn_interface (
 
   // Repack as 2D input to BNN
   logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in[0:CONV1_IC-1];
-  assign conv1_img_in[0] = img_in_truncated;
+  // assign conv1_img_in[0] = img_in_truncated;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      conv1_img_in[0] <= '0;
+    end else begin
+      conv1_img_in[0] <= img_in_truncated;
+    end
+  end
 
   // ----------------- BNN Module Instantiation -----------------
 

@@ -75,18 +75,26 @@ set_property CONFIG_MODE SPIx4 [current_design]
 # FPGA clock
 create_clock -name clk -period 10.000 [get_ports clk]
 
- 
 ## ---- SPI dummy clock (asynchronous) ----
 set spi_clk_period 1000.0; # 1 MHz = 1000 ns
 create_clock -name sclk_async -period $spi_clk_period [get_ports SCLK]
-set_clock_groups -asynchronous \
-    -group { [get_clocks clk] } \
-    -group { [get_clocks sclk_async] }
+#set_clock_groups -asynchronous \
+#    -group { [get_clocks clk] } \
+#    -group { [get_clocks sclk_async] }
 
-
-# 2‑FF synchroniser timing on FF1→FF2
-# set_property ASYNC_REG TRUE [get_cells {*rst_sync_ff*}]
 
 # Prevent any timing analysis on the external pin itself
 set_false_path -from [get_ports rst_n_pin]
 set_false_path -from [get_ports {COPI spi_cs_n}] -to [get_clocks clk]
+
+# The seven‑segment display and status LEDs update only once per classification
+# → they may take two full system cycles to settle.
+#set_multicycle_path 2 \
+#    -from [get_cells -hierarchical *u_bnn_interface*] \
+#    -to   [get_ports {seg[*] status_code_reg[*]}] \
+#    -setup
+
+#set_multicycle_path 1 \
+#    -from [get_cells -hierarchical *u_bnn_interface*] \
+#    -to   [get_ports {seg[*] status_code_reg[*]}] \
+#    -hold

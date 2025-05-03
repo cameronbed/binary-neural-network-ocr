@@ -129,6 +129,7 @@ module system_controller (
     else seg <= seg_next;
   end
 
+
   //===================================================
   // FSM Controller
   //===================================================
@@ -140,6 +141,8 @@ module system_controller (
   logic       buffer_write_request;
   logic       buffer_write_ready;
   logic [7:0] spi_rx_data;
+  logic       spi_byte_valid;
+  logic       byte_taken;
 
   controller_fsm u_controller_fsm (
       .clk  (clk),
@@ -173,9 +176,6 @@ module system_controller (
   //===================================================
   // SPI Peripheral
   //===================================================
-
-  logic spi_byte_valid;
-  logic byte_taken;
 
   spi_peripheral spi_peripheral_inst (
       .rst_n(rst_n),
@@ -240,7 +240,7 @@ module system_controller (
   // ----------------- Debug Module Instantiation -----------------
   debug_module u_debug_module (
       .clk         (clk),
-      .rst_n       (rst_n),    // <<< added rst_n connection
+      .rst_n       (rst_n),         // <<< added rst_n connection
       .debug_enable(debug_trigger),
 
       // FSM
