@@ -51,15 +51,15 @@ module system_controller (
   logic rst_n;
 
   always_ff @(posedge clk or negedge rst_n_pin) begin
-    if (!rst_n_pin) begin  // async assertion
+    if (!rst_n_pin) begin
       rst_sync_ff1 <= 1'b0;
       rst_sync_ff2 <= 1'b0;
-    end else begin  // synchronous release
+    end else begin
       rst_sync_ff1 <= 1'b1;
       rst_sync_ff2 <= rst_sync_ff1;
     end
   end
-  assign rst_n = rst_sync_ff2;  // use rst_n in all sub‑blocks
+  assign rst_n = rst_sync_ff2;
 
   // ---------------------- Cycle Counters ----------------------
 `ifndef SYNTHESIS
@@ -89,7 +89,11 @@ module system_controller (
   logic [3:0] result_out;
   logic [3:0] result_reg;
   logic       result_reg_valid;
-  logic [6:0] seg_next;
+
+  logic [6:0] seg_reg_stage1;
+  logic [6:0] seg_reg_stage2;
+
+  //initial seg_reg_stage1 = 7'b111_1111;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -103,20 +107,20 @@ module system_controller (
 
   always_comb begin
     if (!result_reg_valid) begin
-      seg_next = 7'b111_1111;  // blank when no result
+      seg_reg_stage1 = 7'b111_1111;  // blank when no result
     end else begin
       case (result_reg)
-        4'b0000: seg_next = 7'b100_0000;  // Display 0
-        4'b0001: seg_next = 7'b111_1001;  // Display 1
-        4'b0010: seg_next = 7'b010_0100;  // Display 2
-        4'b0011: seg_next = 7'b011_0000;  // Display 3
-        4'b0100: seg_next = 7'b001_1001;  // Display 4
-        4'b0101: seg_next = 7'b001_0010;  // Display 5
-        4'b0110: seg_next = 7'b000_0010;  // Display 6
-        4'b0111: seg_next = 7'b111_1000;  // Display 7
-        4'b1000: seg_next = 7'b000_0000;  // Display 8
-        4'b1001: seg_next = 7'b001_0000;  // Display 9
-        default: seg_next = 7'b111_1111;  // Blank
+        4'b0000: seg_reg_stage1 = 7'b100_0000;  // Display 0
+        4'b0001: seg_reg_stage1 = 7'b111_1001;  // Display 1
+        4'b0010: seg_reg_stage1 = 7'b010_0100;  // Display 2
+        4'b0011: seg_reg_stage1 = 7'b011_0000;  // Display 3
+        4'b0100: seg_reg_stage1 = 7'b001_1001;  // Display 4
+        4'b0101: seg_reg_stage1 = 7'b001_0010;  // Display 5
+        4'b0110: seg_reg_stage1 = 7'b000_0010;  // Display 6
+        4'b0111: seg_reg_stage1 = 7'b111_1000;  // Display 7
+        4'b1000: seg_reg_stage1 = 7'b000_0000;  // Display 8
+        4'b1001: seg_reg_stage1 = 7'b001_0000;  // Display 9
+        default: seg_reg_stage1 = 7'b111_1111;  // Blank
       endcase
 
       // $display("[TRACE][%0t] result_ready=%b  result_out=%0h  result_reg=%0h  seg_next=%b  seg=%b",
@@ -125,9 +129,11 @@ module system_controller (
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) seg <= 7'b1111111;
-    else seg <= seg_next;
+    if (!rst_n) seg_reg_stage2 <= 7'b111_1111;
+    else seg_reg_stage2 <= seg_reg_stage1;
   end
+
+  assign seg = seg_reg_stage2;
 
 
   //===================================================

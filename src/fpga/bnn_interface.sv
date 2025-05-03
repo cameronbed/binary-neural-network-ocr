@@ -58,9 +58,6 @@ module bnn_interface (
 
       result_out_ff1    <= 4'b0;
       result_out_ff2    <= 4'b0;
-
-      img_to_bnn_ff1[0] <= '0;
-      img_to_bnn_ff2[0] <= '0;
     end else begin
       // Data pipeline
       img_to_bnn_ff1[0] <= img_to_bnn[0];
