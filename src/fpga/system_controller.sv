@@ -46,8 +46,8 @@ module system_controller (
   // end
 
   // ----------------- Synchronous Reset -----------------
-  (* ASYNC_REG = "TRUE" *)logic rst_sync_ff1;
-  (* ASYNC_REG = "TRUE" *)logic rst_sync_ff2;
+  logic rst_sync_ff1;
+  logic rst_sync_ff2;
   logic rst_n;
 
   always_ff @(posedge clk or negedge rst_n_pin) begin
