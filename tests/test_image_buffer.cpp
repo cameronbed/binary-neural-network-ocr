@@ -144,6 +144,8 @@ void send_pattern(Vsystem_controller *dut, const std::vector<std::string> &patte
         tick_main_clk(dut, 1);
     }
 
+    std::cout << " TESTING ----------------- TESTING ---------------" << "\n";
+
     // Wait for BNN to consume
     check_fsm_state(dut, STATUS_BNN_BUSY, "STATUS_BNN_BUSY");
     while (dut->status_code_reg == STATUS_BNN_BUSY)
