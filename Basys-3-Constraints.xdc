@@ -80,34 +80,40 @@ set spi_clk_period 1000.0; # 1 MHz = 1000 ns
 create_clock -name sclk_async -period $spi_clk_period [get_ports SCLK]
 set_clock_groups -asynchronous -group [get_clocks clk] -group [get_clocks sclk_async]
 
+# Ignore timing to 7-segment display outputs
+set_false_path -to [get_ports {seg[*]}]
 
-# Define output delay for seg[0] to seg[6]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[0]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[1]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[2]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[3]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[4]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[5]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[6]}]
+# Ignore timing to status code outputs
+set_false_path -to [get_ports {status_code_reg[*]}]
 
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[0]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[1]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[2]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[3]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[4]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[5]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[6]}]
 
-# Define output delay for status code bits
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[0]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[1]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[2]}]
-set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[3]}]
+# # Define output delay for seg[0] to seg[6]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[0]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[1]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[2]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[3]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[4]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[5]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {seg[6]}]
 
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[0]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[1]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[2]}]
-set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[3]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[0]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[1]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[2]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[3]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[4]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[5]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {seg[6]}]
+
+# # Define output delay for status code bits
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[0]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[1]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[2]}]
+# set_output_delay -max 10 -clock [get_clocks clk] [get_ports {status_code_reg[3]}]
+
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[0]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[1]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[2]}]
+# set_output_delay -min 0 -clock [get_clocks clk] [get_ports {status_code_reg[3]}]
 
 set_input_delay -max 10 -clock [get_clocks sclk_async] [get_ports COPI]
 set_input_delay -min 0 -clock [get_clocks sclk_async] [get_ports COPI]
