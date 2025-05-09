@@ -46,12 +46,22 @@ module system_controller (
   // end
 
   // ----------------- Synchronous Reset -----------------
-  (* ASYNC_REG = "TRUE" *)logic rst_sync_ff1;
-  (* ASYNC_REG = "TRUE" *)logic rst_sync_ff2;
+  logic rst_sync_ff1;
+  logic rst_sync_ff2;
+  logic rst_n_pin_reg;
   logic rst_n;
 
-  always_ff @(posedge clk or negedge rst_n_pin) begin
+  always_ff @(edge rst_n_pin) begin
+    if (rst_n_pin) begin
+        rst_n_pin_reg <= 1;
+    end
     if (!rst_n_pin) begin
+        rst_n_pin_reg <= 0;
+    end
+  end
+
+  always_ff @(posedge clk) begin
+    if (!rst_n_pin_reg) begin
       rst_sync_ff1 <= 1'b0;
       rst_sync_ff2 <= 1'b0;
     end else begin
