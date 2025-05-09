@@ -91,7 +91,7 @@ void send_digit(Vsystem_controller *dut, const std::vector<std::string> &digit, 
 
     tick_main_clk(dut, 5);
     std::string decoded_seg = decode_seg(dut->seg);
-    std::cout << "[TB IMG] 7-segment display for digit " << idx << ": " << decoded_seg << "\n";
+    std::cout << "[SEG DISPLAY] 7-segment display for digit " << idx << ": " << decoded_seg << "\n";
 
     tick_main_clk(dut, 6);
 
