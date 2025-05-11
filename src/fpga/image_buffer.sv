@@ -12,20 +12,20 @@ module image_buffer (
     output logic buffer_full,
     output logic buffer_empty,
 
-    output logic [903:0] img_out
+    output logic [899:0] img_out
 );
   parameter int IMG_WIDTH = 30;
   parameter int IMG_HEIGHT = 30;
   parameter int TOTAL_BITS = 904;
+  parameter int IMG_BITS = 900;
   parameter logic [6:0] IMG_BYTE_SIZE = 7'd113;
 
-  logic [7:0] image_buffer[0:112];
+  logic [899:0] internal_image_buffer;
 
   logic [6:0] write_addr_internal;
   logic [6:0] next_addr_ff;
 
   logic buffer_empty_reg;
-
 
   //===================================================
   // Write Logic + next‐addr tracking
@@ -43,11 +43,15 @@ module image_buffer (
       next_addr_ff <= write_addr_internal;
 
       if (write_request && (write_addr_internal < IMG_BYTE_SIZE)) begin
-        image_buffer[write_addr_internal] <= data_in;
 
-        write_addr_internal <= write_addr_internal + 1;
+        if (write_addr_internal == IMG_BYTE_SIZE - 1) begin
+          internal_image_buffer[TOTAL_BITS-8+:4] <= data_in[3:0]; // Only the lower four bits on the last byte
+        end else begin
+          internal_image_buffer[write_addr_internal*8+:8] <= data_in; // Writing the data to the image buffer
+        end
 
-        next_addr_ff <= write_addr_internal + 1;
+        write_addr_internal <= write_addr_internal + 1;  // Advancing the write address
+        next_addr_ff <= write_addr_internal + 1;  // Setting the next write address
       end
 
       buffer_empty_reg <= (write_addr_internal == 0);
@@ -55,20 +59,11 @@ module image_buffer (
   end
 
   //===================================================
-  // Constructing img_out as flattened output
-  //===================================================
-  genvar i;
-  generate
-    for (i = 0; i < 113; i++) begin : PACK_IMAGE
-      assign img_out[i*8+:8] = image_buffer[i];
-    end
-  endgenerate
-
-  //===================================================
   // Status Flag and outputs
   //===================================================
-  assign write_ready  = (write_addr_internal < IMG_BYTE_SIZE);
-  assign buffer_full  = (next_addr_ff >= IMG_BYTE_SIZE);
+  assign write_ready = (write_addr_internal < IMG_BYTE_SIZE);
+  assign buffer_full = (next_addr_ff >= IMG_BYTE_SIZE);
   assign buffer_empty = buffer_empty_reg;
+  assign img_out = internal_image_buffer;
 
 endmodule

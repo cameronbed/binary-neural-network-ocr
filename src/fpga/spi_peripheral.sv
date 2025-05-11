@@ -32,6 +32,7 @@ module spi_peripheral (
 
   spi_state_t spi_state, spi_next_state;
 
+  // DEBUG
 `ifndef SYNTHESIS
   logic [31:0] cycle_cnt;
   spi_state_t prev_spi_state;
@@ -42,7 +43,6 @@ module spi_peripheral (
   // Synchronizers
   //===================================================
   logic copi_q1, copi_q2;
-
   logic sclk_q1, sclk_q2;
   logic cs_q1, cs_q2;
 
@@ -84,7 +84,7 @@ module spi_peripheral (
   logic [3:0] bit_cnt;
 
   always_comb begin
-    spi_next_state = spi_state;  // Default stay
+    spi_next_state = spi_state;
 
     case (spi_state)
       SPI_IDLE: begin
@@ -92,8 +92,7 @@ module spi_peripheral (
       end
 
       SPI_RX: begin
-        if (bit_cnt == 4'd7 && sclk_rising)  // Full 8 bits received
-          spi_next_state = SPI_BYTE_READY;
+        if (bit_cnt == 4'd7 && sclk_rising) spi_next_state = SPI_BYTE_READY;
       end
 
       SPI_BYTE_READY: begin

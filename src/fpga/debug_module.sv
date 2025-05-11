@@ -30,7 +30,7 @@ module debug_module (
     input logic bnn_enable,
 
     // BNN
-    input logic [903:0] img_in,
+    input logic [899:0] img_in,
     input logic [  3:0] result_out,
 
     // Control signals

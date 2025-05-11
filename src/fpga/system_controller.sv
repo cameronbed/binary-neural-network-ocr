@@ -11,7 +11,6 @@
 module system_controller (
     input logic clk,
     input logic rst_n_pin,
-    //input logic rst_n_sw_input,
 
     // SPI
     input logic SCLK,
@@ -21,29 +20,18 @@ module system_controller (
     // System Outputs
     output logic [3:0] status_code_reg,
     output logic [6:0] seg,
+    output logic decimalPoint,
 
     output logic heartbeat
 
     `ifndef SYNTHESIS
-        ,input logic debug_trigger
+    , input logic debug_trigger
     `endif
 );
   //===================================================
   // Internal Signals
   //===================================================
   logic result_ready;
-
-  // -------------- Debounch the switch ---------------------
-  // logic sw_sync_0, sw_sync_1;
-  // always_ff @(posedge clk or negedge rst_n) begin
-  //   if (!rst_n) begin
-  //     sw_sync_0 <= 0;
-  //     sw_sync_1 <= 0;
-  //   end else begin
-  //     sw_sync_0 <= rst_n_sw_input;
-  //     sw_sync_1 <= sw_sync_0;
-  //   end
-  // end
 
   // ----------------- Synchronous Reset -----------------
   logic rst_sync_ff1;
@@ -53,10 +41,10 @@ module system_controller (
 
   always_ff @(edge rst_n_pin) begin
     if (rst_n_pin) begin
-        rst_n_pin_reg <= 1;
+      rst_n_pin_reg <= 1;
     end
     if (!rst_n_pin) begin
-        rst_n_pin_reg <= 0;
+      rst_n_pin_reg <= 0;
     end
   end
 
@@ -71,7 +59,7 @@ module system_controller (
   end
   assign rst_n = rst_sync_ff2;
 
-  // ---------------------- Cycle Counters ----------------------
+  // ---------------------- Cycle Counter ----------------------
 `ifndef SYNTHESIS
   logic [31:0] main_cycle_cnt, sclk_cycle_cnt;
   always_ff @(posedge clk or negedge rst_n) begin
@@ -103,8 +91,6 @@ module system_controller (
   logic [6:0] seg_reg_stage1;
   logic [6:0] seg_reg_stage2;
 
-  //initial seg_reg_stage1 = 7'b111_1111;
-
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       result_reg       <= 4'd0;
@@ -116,8 +102,12 @@ module system_controller (
   end
 
   always_comb begin
+    seg_reg_stage1 = 7'b111_1111;  // blank when no result
+    decimalPoint   = 1'b1;
+
     if (!result_reg_valid) begin
       seg_reg_stage1 = 7'b111_1111;  // blank when no result
+      decimalPoint   = 1'b1;
     end else begin
       case (result_reg)
         4'b0000: seg_reg_stage1 = 7'b100_0000;  // Display 0
@@ -130,7 +120,14 @@ module system_controller (
         4'b0111: seg_reg_stage1 = 7'b111_1000;  // Display 7
         4'b1000: seg_reg_stage1 = 7'b000_0000;  // Display 8
         4'b1001: seg_reg_stage1 = 7'b001_0000;  // Display 9
-        default: seg_reg_stage1 = 7'b111_1111;  // Blank
+        4'b1010: begin
+          seg_reg_stage1 = 7'b111_1111;  // blank
+          decimalPoint   = 1'b1;  // decimal point
+        end
+        default: begin
+          seg_reg_stage1 = 7'b111_1111;  // Blank
+          decimalPoint   = 1'b0;
+        end
       endcase
 
       // $display("[TRACE][%0t] result_ready=%b  result_out=%0h  result_reg=%0h  seg_next=%b  seg=%b",
@@ -214,7 +211,7 @@ module system_controller (
   //===================================================
   // Image Buffer
   //===================================================
-  logic [903:0] image_buffer_internal;
+  logic [899:0] image_buffer_internal;
 
 
   image_buffer u_image_buffer (
