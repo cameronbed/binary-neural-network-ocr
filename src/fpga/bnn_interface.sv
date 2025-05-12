@@ -146,7 +146,7 @@ module bnn_interface (
 
   // Main sequential logic
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n || bnn_clear) begin
+    if (!rst_n) begin
       state <= IDLE;
 
       result_ready_internal <= 1'b0;
@@ -155,7 +155,15 @@ module bnn_interface (
 
       img_in_stage <= 900'd0;
       img_to_bnn_raw <= 900'd0;
+    end else if (bnn_clear) begin
+      state <= IDLE;
 
+      result_ready_internal <= 1'b0;
+      data_in_ready_stage <= 1'b0;
+      result_out_stage <= 4'd0;
+
+      img_in_stage <= 900'd0;
+      img_to_bnn_raw <= 900'd0;
     end else begin
       state <= next_state;
       case (state)
