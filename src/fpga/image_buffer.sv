@@ -62,7 +62,7 @@ module image_buffer (
   // Status Flag and outputs
   //===================================================
   assign write_ready = (write_addr_internal < IMG_BYTE_SIZE);
-  assign buffer_full = (next_addr_ff >= IMG_BYTE_SIZE);
+  assign buffer_full = (write_addr_internal >= IMG_BYTE_SIZE);
   assign buffer_empty = buffer_empty_reg;
   assign img_out = internal_image_buffer;
 

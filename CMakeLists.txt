@@ -27,6 +27,10 @@ set(RTL_SOURCES
     # ${CMAKE_SOURCE_DIR}/src/fpga/bnn_module/MaxPoolCore.sv
 )
 
+set(DPI_SRCS tests/external.cpp)
+
+set(TOP tb.sv)
+
 # Set up paths
 set(TEST_NAME main_test)
 set(TESTBENCH_CPP 

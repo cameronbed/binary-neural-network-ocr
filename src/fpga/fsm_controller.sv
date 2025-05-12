@@ -146,7 +146,7 @@ module controller_fsm (
         next_status_code_reg = STATUS_RX_IMG_RDY;
 
         if (new_spi_byte) begin
-          if (spi_byte_valid) begin
+          if (spi_byte_valid && buffer_write_ready) begin
             next_state           = S_IMG_RX;
             next_status_code_reg = STATUS_RX_IMG;
             byte_taken_comb      = 1;
@@ -172,7 +172,7 @@ module controller_fsm (
             clear = 1;
             byte_taken_comb = 1;
 
-          end else begin
+          end else if (buffer_write_ready) begin
             buffer_write_request = 1;
             buffer_write_data = spi_rx_data;
             byte_taken_comb = 1;
@@ -212,9 +212,14 @@ module controller_fsm (
 
       S_CLEAR: begin
         clear = 1;
+        next_status_code_reg = STATUS_IDLE;
+
+        if (new_spi_byte) begin
+          byte_taken_comb = 1;
+        end
+
         if (buffer_empty) begin
           next_state = S_IDLE;
-          next_status_code_reg = STATUS_IDLE;
         end
       end
 

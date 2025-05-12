@@ -97,6 +97,7 @@ vivado.ip_user_files/
 vivado.runs/
 vivado.sim/
 obj_dir/
+verible*/
 
 ###### for Xilinx Vivado|ISE
 .Xil/

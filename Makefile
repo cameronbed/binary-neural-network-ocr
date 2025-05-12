@@ -1,42 +1,90 @@
-# Vivado Paths
-VIVADO := "C:/Xilinx/Vivado/2024.2/bin/vivado.bat"
-VIVADO_BIN := "C:/Xilinx/Vivado/2024.2/bin"
+# -------------------------------------------------------------------
+# Paths & tools
+# -------------------------------------------------------------------
+VIVADO      := C:/Xilinx/Vivado/2024.2/bin/vivado.bat
+VIVADO_BIN  := C:/Xilinx/Vivado/2024.2/bin
 
-# Verbose build option
-VERBOSE=1
+INCLUDE_DIRS := -Isrc/fpga -Isrc/fpga/bnn_module -Itests
 
+VERILATOR   := verilator
+VERILATOR_FLAGS = --cc --exe --top-module tb --sv \
+                  -CFLAGS "-std=c++17" -LDFLAGS "-pthread" \
+                  $(INCLUDE_DIRS) \
+				  --timing
+
+# -------------------------------------------------------------------
+# Sources
+# -------------------------------------------------------------------
+SV_SRCS = \
+    src/fpga/system_controller.sv \
+    src/fpga/spi_peripheral.sv   \
+    src/fpga/bnn_interface.sv    \
+    src/fpga/debug_module.sv     \
+    src/fpga/fsm_controller.sv   \
+    src/fpga/image_buffer.sv     \
+    src/fpga/bnn_module/bnn_top.sv      \
+    src/fpga/bnn_module/Comparator.sv   \
+    src/fpga/bnn_module/Conv2d_MaxPool2d.sv       \
+    src/fpga/bnn_module/ConvCore.sv     \
+    src/fpga/bnn_module/FC.sv           \
+    src/fpga/bnn_module/MaxPoolCore.sv
+
+DPI_SRCS = tests/external.cpp
+
+TB_SV    = tests/tb.sv
+
+# -------------------------------------------------------------------
+# Default (CMake-based)
+# -------------------------------------------------------------------
+.PHONY: all test clean
 all:
 	@echo "Running CMake build..."
 	cmake -S . -B build
 	cmake --build build
 
-# Run the test with verbose output
 test: all
-	@echo "Running test..."
-	@./build/main_test || (echo "Test failed. Check the logs above for details." && exit 1)
+	@echo "Running C++ unit tests..."
+	@./build/main_test \
+	  || (echo "Test failed. Check logs above." && exit 1)
 
-# Clean the build output
 clean:
-	@echo "Cleaning..."
-	@rm -rf build
+	@echo "Cleaning build artifacts..."
+	@rm -rf build obj_dir
 
-# ============== Vivado Targets ==============
+# -------------------------------------------------------------------
+# Verilator‐driven SV simulation
+# -------------------------------------------------------------------
+.PHONY: sim
+sim: obj_dir/Vtb
+	@echo "Launching Verilator simulation..."
+	@obj_dir/Vtb
 
-# Synthesis and simulation targets
+obj_dir/Vtb: tests/tb.sv tests/external.cpp
+	@echo "=== Verilating design ==="
+	$(VERILATOR) $(VERILATOR_FLAGS) \
+	  tests/tb.sv \
+	  tests/external.cpp \
+	  tests/main.cpp
+	@echo "=== Building simulation executable ==="
+	@make -C obj_dir -f Vtb.mk Vtb
+
+
+# -------------------------------------------------------------------
+# Vivado targets
+# -------------------------------------------------------------------
+.PHONY: bitstream flash size
 bitstream:
-	@echo "==> Synthesizing and generating bitstream..."
-	$(VIVADO) -mode batch -source scripts/run_vivado.tcl
-	
-# Program the Basys3 board
-flash:
-	@echo "==> Programming Basys3 board..."
-	$(VIVADO) -mode batch -source scripts/flash_vivado.tcl
+	@echo "Synthesizing and generating bitstream..."
+	"$(VIVADO)" -mode batch -source scripts/run_vivado.tcl
 
-# Show the size of the synthesized bitstream
+flash:
+	@echo "Programming Basys3 board..."
+	"$(VIVADO)" -mode batch -source scripts/flash_vivado.tcl
+
 size:
-	@echo "==> Checking size of build/bnn_ocr.bit..."
+	@echo "Checking bitstream size..."
 	@if [ -f build/bnn_ocr.bit ]; then \
-		ls -lh build/bnn_ocr.bit; \
+	  ls -lh build/bnn_ocr.bit; \
 	else \
-		echo "Bitstream not found. Run 'make bitstream' first."; \
+	  echo "No bitstream found. Run 'make bitstream' first."; \
 	fi

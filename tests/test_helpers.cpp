@@ -8,26 +8,43 @@
 #include <stdexcept>
 #include <iomanip>
 #include <format>
+#include <random>
+
+static std::mt19937_64 rng{0};
+static std::uniform_int_distribution<int> phase_jitter{0, 2};
 
 constexpr int HALF_PERIOD_NS = 5;
 
 void sclk_rise(Vsystem_controller *dut)
 {
+    // asynchronously toggle SCLK at a random offset
+    int jitter = phase_jitter(rng);
+    for (int i = 0; i < jitter; i++)
+    {
+        dut->eval();
+        tick_main_clk(dut, 1); // just 1 half-cycle
+    }
     dut->SCLK = 1;
     dut->eval();
-    tick_main_clk(dut, 5); // Hold SCLK high for setup/sample
+    tick_main_clk(dut, 2 + jitter); // then hold high a bit
 }
 
 void sclk_fall(Vsystem_controller *dut)
 {
+    int jitter = phase_jitter(rng);
+    for (int i = 0; i < jitter; i++)
+    {
+        dut->eval();
+        tick_main_clk(dut, 1);
+    }
     dut->SCLK = 0;
     dut->eval();
-    tick_main_clk(dut, 5); // Hold SCLK low after sample
+    tick_main_clk(dut, 2 + jitter);
 }
 
 void tick_main_clk(Vsystem_controller *dut, int cycles)
 {
-    for (int i = 0; i < cycles; i++)
+    for (int i = 0; i < (cycles * 100); i++)
     {
         dut->clk = !dut->clk;
         dut->eval();

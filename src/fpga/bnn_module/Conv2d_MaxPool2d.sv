@@ -6,6 +6,8 @@
 `include "MaxPoolCore.sv"
 `endif
 
+`timescale 1ns / 1ps
+
 module Conv2d_MaxPool2d #(
     parameter int IC = 4,
     parameter int OC = 8,

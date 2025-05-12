@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-
 `ifndef SYNTHESIS
 `include "spi_peripheral.sv"
 `include "bnn_interface.sv"
@@ -7,6 +5,9 @@
 `include "fsm_controller.sv"
 `include "image_buffer.sv"
 `endif
+
+`timescale 1ns / 1ps
+
 
 module system_controller (
     input logic clk,
@@ -103,26 +104,56 @@ module system_controller (
 
   always_comb begin
     seg_reg_stage1 = 7'b111_1111;  // blank when no result
-    decimalPoint   = 1'b1;
+    decimalPoint   = 1'b0;
 
     if (!result_reg_valid) begin
       seg_reg_stage1 = 7'b111_1111;  // blank when no result
-      decimalPoint   = 1'b1;
+      decimalPoint   = 1'b0;
     end else begin
       case (result_reg)
-        4'b0000: seg_reg_stage1 = 7'b100_0000;  // Display 0
-        4'b0001: seg_reg_stage1 = 7'b111_1001;  // Display 1
-        4'b0010: seg_reg_stage1 = 7'b010_0100;  // Display 2
-        4'b0011: seg_reg_stage1 = 7'b011_0000;  // Display 3
-        4'b0100: seg_reg_stage1 = 7'b001_1001;  // Display 4
-        4'b0101: seg_reg_stage1 = 7'b001_0010;  // Display 5
-        4'b0110: seg_reg_stage1 = 7'b000_0010;  // Display 6
-        4'b0111: seg_reg_stage1 = 7'b111_1000;  // Display 7
-        4'b1000: seg_reg_stage1 = 7'b000_0000;  // Display 8
-        4'b1001: seg_reg_stage1 = 7'b001_0000;  // Display 9
+        4'b0000: begin 
+          seg_reg_stage1 = 7'b100_0000;  // Display 0
+          decimalPoint   = 1'b1;
+        end
+        4'b0001: begin
+          seg_reg_stage1 = 7'b111_1001;  // Display 1
+          decimalPoint   = 1'b1;
+        end
+        4'b0010: begin
+          seg_reg_stage1 = 7'b010_0100;  // Display 2
+          decimalPoint   = 1'b1;
+        end
+        4'b0011: begin
+          seg_reg_stage1 = 7'b011_0000;  // Display 3
+          decimalPoint   = 1'b1;
+        end
+        4'b0100: begin
+          seg_reg_stage1 = 7'b001_1001;  // Display 4
+          decimalPoint   = 1'b1;
+        end
+        4'b0101: begin
+          seg_reg_stage1 = 7'b001_0010;  // Display 5
+          decimalPoint   = 1'b1;
+        end
+        4'b0110: begin
+          seg_reg_stage1 = 7'b000_0010;  // Display 6
+          decimalPoint   = 1'b1;
+        end
+        4'b0111: begin
+          seg_reg_stage1 = 7'b111_1000;  // Display 7
+          decimalPoint   = 1'b1;
+        end
+        4'b1000: begin
+          seg_reg_stage1 = 7'b000_0000;  // Display 8
+          decimalPoint   = 1'b1;
+        end
+        4'b1001: begin
+          seg_reg_stage1 = 7'b001_0000;  // Display 9
+          decimalPoint   = 1'b1;
+        end
         4'b1010: begin
           seg_reg_stage1 = 7'b111_1111;  // blank
-          decimalPoint   = 1'b1;  // decimal point
+          decimalPoint   = 1'b0;  // decimal point
         end
         default: begin
           seg_reg_stage1 = 7'b111_1111;  // Blank
@@ -243,7 +274,6 @@ module system_controller (
       .result_out(result_out),  // Match 4-bit width
 
       // Control signals
-      .img_buffer_full(buffer_full),
       .result_ready(result_ready),
       .bnn_enable(bnn_enable),
       .bnn_clear(clear_internal)

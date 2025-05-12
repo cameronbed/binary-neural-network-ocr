@@ -1,6 +1,8 @@
 `ifndef MAXPOOLCORE_SV
 `define MAXPOOLCORE_SV
 
+`timescale 1ns / 1ps
+
 module MaxPoolCore #(
     parameter int IMG_IN_SIZE  = 28,
     parameter int IMG_OUT_SIZE = IMG_IN_SIZE / 2
