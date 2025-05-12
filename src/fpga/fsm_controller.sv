@@ -20,6 +20,7 @@ module controller_fsm (
 
     output logic buffer_write_request,
     input  logic buffer_write_ready,
+    input  logic write_ack,
 
     output logic [7:0] buffer_write_data,
     output logic [6:0] buffer_write_addr,
@@ -63,6 +64,7 @@ module controller_fsm (
   logic prev_spi_byte_valid;
   logic new_spi_byte;
   logic buffer_full_sync;
+  logic waiting_for_write_ack;
 
   //===================================================
   // FSM Next, Status Code, Buffer Write Address Register
@@ -75,6 +77,7 @@ module controller_fsm (
       byte_taken <= 0;
       prev_spi_byte_valid <= 0;
       buffer_full_sync <= 0;
+      waiting_for_write_ack <= 0;
 
     end else begin
       current_state       <= next_state;
@@ -88,8 +91,19 @@ module controller_fsm (
 
       if (current_state == S_IDLE && spi_byte_valid && spi_rx_data == CMD_CLEAR)
         buffer_write_addr_int <= 0;
-      else if (current_state == S_IMG_RX && new_spi_byte)
+
+      else if (current_state == S_IMG_RX && new_spi_byte) begin
         buffer_write_addr_int <= buffer_write_addr_int + 1;
+      end
+
+      if (current_state == S_WAIT_IMAGE || current_state == S_IMG_RX) begin
+        // Set the flag when a write is requested
+        if (buffer_write_request) waiting_for_write_ack <= 1'b1;
+        // Clear the flag when the write is acknowledged
+        else if (write_ack) waiting_for_write_ack <= 1'b0;
+      end else begin
+        waiting_for_write_ack <= 1'b0;  // Reset in all other states
+      end
     end
   end
 
@@ -146,13 +160,16 @@ module controller_fsm (
         next_status_code_reg = STATUS_RX_IMG_RDY;
 
         if (new_spi_byte) begin
-          if (spi_byte_valid && buffer_write_ready) begin
+          if (spi_byte_valid && buffer_write_ready && !waiting_for_write_ack) begin
             next_state           = S_IMG_RX;
             next_status_code_reg = STATUS_RX_IMG;
-            byte_taken_comb      = 1;
             buffer_write_request = 1;
             buffer_write_data    = spi_rx_data;
           end
+        end
+
+        if (write_ack) begin
+          byte_taken_comb = 1;  // Acknowledge only after write is committed
         end
       end
 
@@ -165,7 +182,7 @@ module controller_fsm (
           next_state = S_WAIT_FOR_BNN;
           next_status_code_reg = STATUS_BNN_BUSY;
 
-        end else if (new_spi_byte) begin
+        end else if (new_spi_byte && !waiting_for_write_ack) begin
           if (spi_rx_data == CMD_CLEAR) begin
             next_state = S_CLEAR;
             next_status_code_reg = STATUS_IDLE;
@@ -175,9 +192,11 @@ module controller_fsm (
           end else if (buffer_write_ready) begin
             buffer_write_request = 1;
             buffer_write_data = spi_rx_data;
-            byte_taken_comb = 1;
             next_status_code_reg = STATUS_RX_IMG;
           end
+        end
+        if (write_ack) begin
+          byte_taken_comb = 1;
         end
       end
 

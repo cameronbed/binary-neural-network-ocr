@@ -43,8 +43,7 @@ module system_controller (
   always_ff @(edge rst_n_pin) begin
     if (rst_n_pin) begin
       rst_n_pin_reg <= 1;
-    end
-    if (!rst_n_pin) begin
+    end else begin
       rst_n_pin_reg <= 0;
     end
   end
@@ -187,6 +186,7 @@ module system_controller (
   logic [7:0] spi_rx_data;
   logic       spi_byte_valid;
   logic       byte_taken;
+  logic       buffer_write_ack;
 
   controller_fsm u_controller_fsm (
       .clk  (clk),
@@ -208,6 +208,7 @@ module system_controller (
 
       .buffer_write_request(buffer_write_request),
       .buffer_write_ready  (buffer_write_ready),
+      .write_ack    (buffer_write_ack),
 
       .buffer_write_data(buffer_write_data),
       .buffer_write_addr(buffer_write_addr),
@@ -252,6 +253,7 @@ module system_controller (
       // inputs
       .write_request(buffer_write_request),
       .write_ready  (buffer_write_ready),
+      .write_ack    (buffer_write_ack),
 
       .clear_buffer(clear_internal),
       .data_in     (buffer_write_data),

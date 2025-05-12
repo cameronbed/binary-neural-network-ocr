@@ -42,7 +42,8 @@ module spi_peripheral (
   //===================================================
   // Synchronizers
   //===================================================
-  logic sclk_sample, sclk_debounced;
+  logic sclk_sample;
+  //logic sclk_debounced;
   logic [1:0] sclk_hist;
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -56,7 +57,8 @@ module spi_peripheral (
   end
 
   logic copi_q1, copi_q2;
-  logic sclk_q1, sclk_q2, sclk_q3;
+  logic sclk_q1, sclk_q2;
+  logic sclk_q3;
   logic cs_q1, cs_q2;
 
   always_ff @(posedge clk or negedge rst_n) begin
@@ -66,7 +68,7 @@ module spi_peripheral (
 
       sclk_q1 <= sclk_sample;
       sclk_q2 <= 1'b0;
-      sclk_q3 <= 1'b0;
+      // sclk_q3 <= 1'b0;
 
       cs_q1   <= 1'b1;
       cs_q2   <= 1'b1;
@@ -76,7 +78,7 @@ module spi_peripheral (
 
       sclk_q1 <= sclk_sample;
       sclk_q2 <= sclk_q1;
-      sclk_q3 <= sclk_q2;
+      // sclk_q3 <= sclk_q2;
 
       cs_q1   <= spi_cs_n;
       cs_q2   <= cs_q1;
