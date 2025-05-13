@@ -3,15 +3,16 @@ module image_buffer (
     input logic clk,
     input logic rst_n,
 
-    input logic clear_buffer,
-    input logic [7:0] data_in,
-
-    input  logic write_request,
-    output logic write_ready,
-    output logic write_ack,
-
+    input  logic clear_buffer,
+    output logic clear_done,
     output logic buffer_full,
     output logic buffer_empty,
+
+    input logic [7:0] data_in,
+
+    output logic write_ready,
+    input  logic write_request,
+    output logic write_ack,
 
     output logic [899:0] img_out
 );

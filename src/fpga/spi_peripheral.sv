@@ -138,7 +138,7 @@ module spi_peripheral (
             bit_cnt   <= 0;
             shift_reg <= 0;
           end else if (sclk_rising) begin
-            shift_reg <= {shift_reg[6:0], copi_sync_2};
+            shift_reg <= {shift_reg[6:0], copi_sync_3};
             bit_cnt   <= bit_cnt + 1;
           end
         end

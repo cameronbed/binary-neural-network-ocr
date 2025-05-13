@@ -15,7 +15,8 @@ module bnn_interface (
     // Control
     output logic result_ready,
     input  logic bnn_enable,
-    input  logic bnn_clear
+    input  logic bnn_clear,
+    output logic bnn_ready_for_input
 );
   //------------------------------------------------------------------
   // Parameters / types

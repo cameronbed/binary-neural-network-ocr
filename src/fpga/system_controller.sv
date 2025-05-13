@@ -4,6 +4,7 @@
 `include "debug_module.sv"
 `include "fsm_controller.sv"
 `include "image_buffer.sv"
+`include "seven_seg_display.sv"
 `endif`timescale 1ns / 1ps
 
 module system_controller (
@@ -39,11 +40,8 @@ module system_controller (
   logic rst_n;
 
   always_ff @(edge rst_n_pin) begin
-    if (rst_n_pin) begin
-      rst_n_pin_reg <= 1;
-    end else begin
-      rst_n_pin_reg <= 0;
-    end
+    if (rst_n_pin) rst_n_pin_reg <= 1;
+    if (!rst_n_pin) rst_n_pin_reg <= 0;
   end
 
   always_ff @(posedge clk) begin
@@ -219,7 +217,6 @@ module system_controller (
       .spi_rx_data(spi_rx_data),
       .rx_data_is_zero(spi_rx_data_is_zero),
 
-
       // Control Signals
       .rx_enable (spi_rx_enable),
       .byte_valid(spi_byte_valid),
@@ -230,6 +227,7 @@ module system_controller (
   // Image Buffer
   //===================================================
   logic [899:0] image_buffer_internal;
+  logic clear_done;
 
 
   image_buffer u_image_buffer (
@@ -242,6 +240,7 @@ module system_controller (
       .write_ack    (buffer_write_ack),
 
       .clear_buffer(clear_internal),
+      .clear_done  (clear_done),
       .data_in     (buffer_write_data),
 
       //outputs
@@ -253,6 +252,8 @@ module system_controller (
   //===================================================
   // BNN Interface 
   //===================================================
+  logic bnn_ready_for_input;
+
   bnn_interface u_bnn_interface (
       .clk  (clk),
       .rst_n(rst_n),
@@ -264,8 +265,24 @@ module system_controller (
       // Control signals
       .result_ready(result_ready),
       .bnn_enable(bnn_enable),
+      .bnn_ready_for_input(bnn_ready_for_input),
       .bnn_clear(clear_internal)
   );
+
+  //===================================================
+  // Seven Segment Display
+  //===================================================
+  // logic [3:0] an;
+
+  // seven_seg_display u_seven_seg_display (
+  //     .clk(clk),
+  //     .rst_n(rst_n),
+  //     .result_ready(result_ready),
+  //     .result_in(result_in),
+  //     .seg(seg),
+  //     .decimalPoint(decimalPoint),
+  //     .an(an)
+  // );
 
 `ifndef SYNTHESIS
   // ----------------- Debug Module Instantiation -----------------
