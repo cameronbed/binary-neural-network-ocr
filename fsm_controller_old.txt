@@ -1,0 +1,343 @@
+`timescale 1ns / 1ps
+
+module controller_fsm (
+    input logic clk,
+    input logic rst_n,
+
+    // SPI interface
+    input  logic [7:0] spi_rx_data,
+    input  logic       spi_byte_valid,
+    output logic       byte_taken,
+    output logic       rx_enable,
+
+    // Commands output signals
+    output logic [3:0] status_code_reg,
+
+    // Image Buffer
+    input  logic buffer_full,
+    input  logic buffer_empty,
+    output logic clear,
+
+    output logic buffer_write_request,
+    input  logic buffer_write_ready,
+    input  logic write_ack,
+
+    output logic [7:0] buffer_write_data,
+    output logic [6:0] buffer_write_addr,
+
+    // BNN interface
+    input  logic result_ready,
+    output logic bnn_enable
+);
+  // Receive codes
+  parameter logic [7:0] CMD_IMG_SEND_REQUEST = 8'hFE;  // 11111101
+  parameter logic [7:0] CMD_CLEAR = 8'hFD;  // 11111011
+
+  // Status codes
+  typedef enum logic [3:0] {
+    STATUS_IDLE       = 4'b0000,  // FPGA idle, ready
+    STATUS_RX_IMG_RDY = 4'b0001,  // Receiving image bytes
+    STATUS_RX_IMG     = 4'b0010,  // SPI bytes are being put in the buffer
+    STATUS_BNN_BUSY   = 4'b0100,  // Image received, BNN running
+    STATUS_RESULT_RDY = 4'b1000,  // BNN result ready
+    STATUS_ERROR      = 4'b1110,  // Error occurred
+    STATUS_UNKNOWN    = 4'b1111   // Busy / undefined
+  } status_code_t;
+
+
+  // FSM states (now 4 bits)
+  typedef enum logic [2:0] {
+    S_IDLE,
+    S_WAIT_IMAGE,
+    S_IMG_RX,
+    S_WAIT_FOR_BNN,
+    S_RESULT_RDY,
+    S_CLEAR
+  } fsm_state_t;
+
+  logic byte_taken_comb;
+  logic prev_spi_byte_valid;
+  logic new_spi_byte;
+  logic buffer_full_sync;
+  logic waiting_for_write_ack;
+
+  logic [6:0] buffer_write_addr_int;
+
+  assign new_spi_byte = spi_byte_valid && !prev_spi_byte_valid;
+  assign status_code_reg = current_status;
+
+  //===================================================
+  // FSM Next Always Comb
+  //===================================================
+  fsm_state_t current_state, next_state;
+
+  always_comb begin
+    next_state = current_state;
+
+    case (current_state)
+      S_IDLE: begin
+        if (buffer_full_sync) begin
+          next_state = S_WAIT_FOR_BNN;
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+          end else if (spi_rx_data == CMD_IMG_SEND_REQUEST) begin
+            next_state = S_WAIT_IMAGE;
+          end
+        end
+      end
+      S_WAIT_IMAGE: begin
+        if (new_spi_byte) begin
+          if (spi_byte_valid && buffer_write_ready && !waiting_for_write_ack) begin
+            next_state = S_IMG_RX;
+          end
+        end
+      end
+      S_IMG_RX: begin
+        if (buffer_full_sync) begin
+          next_state = S_WAIT_FOR_BNN;
+        end else if (new_spi_byte && !waiting_for_write_ack) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+          end
+        end
+      end
+      S_WAIT_FOR_BNN: begin
+        if (result_ready) begin
+          next_state = S_RESULT_RDY;
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_state = S_CLEAR;
+          end
+        end
+      end
+      S_RESULT_RDY: begin
+        if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
+          next_state = S_CLEAR;
+        end
+      end
+      S_CLEAR: begin
+        if (buffer_empty) begin
+          next_state = S_IDLE;
+        end
+      end
+      default: begin
+        next_state = S_IDLE;
+      end
+    endcase
+  end
+
+  //===================================================
+  // Status Next Always Comb
+  //===================================================
+  status_code_t current_status, next_status;
+
+  always_comb begin
+    next_status = current_status;
+
+    case (current_state)
+      S_IDLE: begin
+        next_status = STATUS_IDLE;
+        if (buffer_full_sync) begin
+          next_status = STATUS_BNN_BUSY;
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_status = STATUS_IDLE;
+          end else if (spi_rx_data == CMD_IMG_SEND_REQUEST) begin
+            next_status = STATUS_RX_IMG_RDY;
+          end else begin
+            next_status = STATUS_ERROR;
+          end
+        end else begin
+          next_status = STATUS_IDLE;
+        end
+      end
+
+      S_WAIT_IMAGE: begin
+        next_status = STATUS_RX_IMG_RDY;
+        if (new_spi_byte) begin
+          if (spi_byte_valid && buffer_write_ready && !waiting_for_write_ack) begin
+            next_status = STATUS_RX_IMG;
+          end
+        end
+      end
+
+      S_IMG_RX: begin
+        next_status = STATUS_RX_IMG;
+        if (buffer_full_sync) begin
+          next_status = STATUS_BNN_BUSY;
+        end else if (new_spi_byte && !waiting_for_write_ack) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_status = STATUS_IDLE;
+          end else if (buffer_write_ready) begin
+            next_status = STATUS_RX_IMG;
+          end
+        end
+      end
+
+      S_WAIT_FOR_BNN: begin
+        next_status = STATUS_BNN_BUSY;
+        if (result_ready) begin
+          next_status = STATUS_RESULT_RDY;
+        end else if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            next_status = STATUS_IDLE;
+          end
+        end
+      end
+
+      S_RESULT_RDY: begin
+        next_status = STATUS_RESULT_RDY;
+        if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
+          next_status = STATUS_IDLE;
+        end
+      end
+
+      S_CLEAR: begin
+        next_status = STATUS_IDLE;
+      end
+      default: begin
+        next_status = STATUS_ERROR;
+      end
+    endcase
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      current_state <= S_IDLE;
+      current_status <= STATUS_IDLE;
+
+      buffer_write_addr_int <= 0;
+      byte_taken <= 0;
+      prev_spi_byte_valid <= 0;
+      buffer_full_sync <= 0;
+      waiting_for_write_ack <= 0;
+
+      bnn_enable <= 0;
+      clear <= 0;
+
+    end else begin
+      current_state       <= next_state;
+      current_status      <= next_status;
+
+      byte_taken          <= byte_taken_comb;
+      prev_spi_byte_valid <= spi_byte_valid;
+      buffer_full_sync    <= buffer_full;
+
+      if (current_state == S_IMG_RX && buffer_full_sync) bnn_enable <= 1;
+      else bnn_enable <= 0;
+
+      if ((current_state inside {S_IDLE, S_IMG_RX, S_WAIT_FOR_BNN, S_CLEAR}) && new_spi_byte && spi_rx_data == CMD_CLEAR)
+        clear <= 1;
+      else clear <= 0;
+
+      if (current_state == S_IDLE && spi_byte_valid && spi_rx_data == CMD_CLEAR)
+        buffer_write_addr_int <= 0;
+
+      else if (current_state == S_IMG_RX && new_spi_byte) begin
+        buffer_write_addr_int <= buffer_write_addr_int + 1;
+      end
+
+      if (current_state == S_WAIT_IMAGE || current_state == S_IMG_RX) begin
+
+        // Set the flag when a write is requested
+        if (buffer_write_request) waiting_for_write_ack <= 1'b1;
+
+        // Clear the flag when the write is acknowledged
+        else if (write_ack) waiting_for_write_ack <= 1'b0;
+
+      end else begin
+        waiting_for_write_ack <= 1'b0;  // Reset in all other states
+      end
+    end
+  end
+
+  //===================================================
+  // FSM State
+  //===================================================
+
+  // Next State
+
+  always_comb begin
+    byte_taken_comb = 0;
+    rx_enable = 0;
+    buffer_write_data = 0;
+    buffer_write_addr = buffer_write_addr_int;
+
+    buffer_write_request = 0;
+
+    case (current_state)
+      S_IDLE: begin
+        rx_enable = 1;
+        if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            byte_taken_comb = 1;
+          end else if (spi_rx_data == CMD_IMG_SEND_REQUEST) begin
+            byte_taken_comb = 1;
+          end else begin
+            byte_taken_comb = 1;
+          end
+        end
+      end
+
+      S_WAIT_IMAGE: begin
+        rx_enable = 1;
+        if (new_spi_byte) begin
+          if (spi_byte_valid && buffer_write_ready && !waiting_for_write_ack) begin
+            buffer_write_request = 1;
+            buffer_write_data    = spi_rx_data;
+          end
+        end
+        if (write_ack) begin
+          byte_taken_comb = 1;  // Acknowledge only after write is committed
+        end
+      end
+
+      S_IMG_RX: begin
+        rx_enable = 1;
+        if (buffer_full_sync) begin
+        end else if (new_spi_byte && !waiting_for_write_ack) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            byte_taken_comb = 1;
+          end else if (buffer_write_ready) begin
+            buffer_write_request = 1;
+            buffer_write_data = spi_rx_data;
+          end
+        end
+        if (write_ack) begin
+          byte_taken_comb = 1;
+        end
+      end
+
+      S_WAIT_FOR_BNN: begin
+        rx_enable = 1;
+        if (new_spi_byte) begin
+          if (spi_rx_data == CMD_CLEAR) begin
+            byte_taken_comb = 1;
+          end
+        end
+      end
+
+      S_RESULT_RDY: begin
+        rx_enable = 1;
+        if (new_spi_byte && spi_rx_data == CMD_CLEAR) begin
+          byte_taken_comb = 1;
+        end
+      end
+
+      S_CLEAR: begin
+        if (new_spi_byte) begin
+          byte_taken_comb = 1;
+        end
+      end
+
+      default: begin
+      end
+    endcase
+  end
+
+  function logic is_new_spi_byte();
+    return spi_byte_valid && !prev_spi_byte_valid;
+  endfunction
+
+endmodule

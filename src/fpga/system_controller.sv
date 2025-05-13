@@ -80,17 +80,90 @@ module system_controller (
   //===================================================
   // 7-Segment Display
   //===================================================
+  // logic [3:0] result_out;
+  // logic [3:0] result_reg;
+  // logic       result_reg_valid;
+
+  // logic [6:0] seg_reg_stage1;
+  // logic [6:0] seg_reg_stage2;
+
+  // logic [3:0] digit_0, digit_1, digit_2, digit_3;
+  // logic [3:0] digit_vals[3:0];
+  // logic [1:0] digit_sel;
+  // logic [6:0] seg_out;
+
+  // always_ff @(posedge clk or negedge rst_n) begin
+  //   if (!rst_n) begin
+  //     result_reg       <= 4'd0;
+  //     result_reg_valid <= 1'b0;
+  //   end else begin
+  //     result_reg_valid <= result_ready;
+  //     if (result_ready) result_reg <= result_out;
+  //   end
+  // end
+
+  // always_ff @(posedge clk or negedge rst_n) begin
+  //   if (!rst_n) begin
+  //     digit_0 <= 4'd0;
+  //     digit_1 <= 4'd3;
+  //     digit_2 <= 4'd0;
+  //     digit_3 <= 4'd0;
+  //   end else if (result_reg_valid) begin
+  //     digit_0 <= 4'd0;
+  //     digit_1 <= 4'd5;
+  //     digit_2 <= 4'd0;
+  //     digit_3 <= result_reg;  // show result only here
+  //   end
+  // end
+
+  // always_comb begin
+  //   digit_vals[0] = digit_0;
+  //   digit_vals[1] = digit_1;
+  //   digit_vals[2] = digit_2;
+  //   digit_vals[3] = digit_3;
+  // end
+
+  // // multiplexer counter
+  // always_ff @(posedge clk or negedge rst_n) begin
+  //   if (!rst_n) digit_sel <= 2'd0;
+  //   else digit_sel <= digit_sel + 1;
+  // end
+
+  // // drive the segments & anodes
+  // always_comb begin
+  //   an            = 4'b1111;
+  //   an[digit_sel] = 1'b0;  // active-low
+  //   seg_out       = seven_segment_encode(digit_vals[digit_sel]);
+  //   decimalPoint  = 1'b0;  // or control per digit_sel if you like
+  // end
+
+  // assign seg = seg_out;
+
+  // function logic [6:0] seven_segment_encode(input logic [3:0] v);
+  //   case (v)
+  //     4'd0: seven_segment_encode = 7'b100_0000;
+  //     4'd1: seven_segment_encode = 7'b111_1001;
+  //     4'd2: seven_segment_encode = 7'b010_0100;
+  //     4'd3: seven_segment_encode = 7'b011_0000;
+  //     4'd4: seven_segment_encode = 7'b001_1001;
+  //     4'd5: seven_segment_encode = 7'b001_0010;
+  //     4'd6: seven_segment_encode = 7'b000_0010;
+  //     4'd7: seven_segment_encode = 7'b111_1000;
+  //     4'd8: seven_segment_encode = 7'b000_0000;
+  //     4'd9: seven_segment_encode = 7'b001_0000;
+  //     default: seven_segment_encode = 7'b111_1111;
+  //   endcase
+  // endfunction
+
+  //===================================================
+  // 7-Segment Display
+  //===================================================
   logic [3:0] result_out;
   logic [3:0] result_reg;
   logic       result_reg_valid;
 
   logic [6:0] seg_reg_stage1;
   logic [6:0] seg_reg_stage2;
-
-  logic [3:0] digit_0, digit_1, digit_2, digit_3;
-  logic [3:0] digit_vals[3:0];
-  logic [1:0] digit_sel;
-  logic [6:0] seg_out;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -102,52 +175,76 @@ module system_controller (
     end
   end
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      digit_3 <= 4'd0;
-    end else if (result_reg_valid) begin
-      digit_3 <= result_reg;
+  always_comb begin
+    seg_reg_stage1 = 7'b111_1111;  // blank when no result
+    decimalPoint   = 1'b0;
+
+    if (!result_reg_valid) begin
+      seg_reg_stage1 = 7'b111_1111;  // blank when no result
+      decimalPoint   = 1'b0;
+    end else begin
+      case (result_reg)
+        4'b0000: begin
+          seg_reg_stage1 = 7'b100_0000;  // Display 0
+          decimalPoint   = 1'b1;
+        end
+        4'b0001: begin
+          seg_reg_stage1 = 7'b111_1001;  // Display 1
+          decimalPoint   = 1'b1;
+        end
+        4'b0010: begin
+          seg_reg_stage1 = 7'b010_0100;  // Display 2
+          decimalPoint   = 1'b1;
+        end
+        4'b0011: begin
+          seg_reg_stage1 = 7'b011_0000;  // Display 3
+          decimalPoint   = 1'b1;
+        end
+        4'b0100: begin
+          seg_reg_stage1 = 7'b001_1001;  // Display 4
+          decimalPoint   = 1'b1;
+        end
+        4'b0101: begin
+          seg_reg_stage1 = 7'b001_0010;  // Display 5
+          decimalPoint   = 1'b1;
+        end
+        4'b0110: begin
+          seg_reg_stage1 = 7'b000_0010;  // Display 6
+          decimalPoint   = 1'b1;
+        end
+        4'b0111: begin
+          seg_reg_stage1 = 7'b111_1000;  // Display 7
+          decimalPoint   = 1'b1;
+        end
+        4'b1000: begin
+          seg_reg_stage1 = 7'b000_0000;  // Display 8
+          decimalPoint   = 1'b1;
+        end
+        4'b1001: begin
+          seg_reg_stage1 = 7'b001_0000;  // Display 9
+          decimalPoint   = 1'b1;
+        end
+        4'b1010: begin
+          seg_reg_stage1 = 7'b111_1111;  // blank
+          decimalPoint   = 1'b0;  // decimal point
+        end
+        default: begin
+          seg_reg_stage1 = 7'b111_1111;  // Blank
+          decimalPoint   = 1'b0;
+        end
+      endcase
+
+      // $display("[TRACE][%0t] result_ready=%b  result_out=%0h  result_reg=%0h  seg_next=%b  seg=%b",
+      //        $time, result_ready, result_out, result_reg, seg_next, seg);
     end
   end
 
-  always_comb begin
-    digit_vals[0] = digit_0;
-    digit_vals[1] = digit_1;
-    digit_vals[2] = digit_2;
-    digit_vals[3] = digit_3;
-  end
-
-  // multiplexer counter
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) digit_sel <= 2'd0;
-    else digit_sel <= digit_sel + 1;
+    if (!rst_n) seg_reg_stage2 <= 7'b111_1111;
+    else seg_reg_stage2 <= seg_reg_stage1;
   end
 
-  // drive the segments & anodes
-  always_comb begin
-    an            = 4'b1111;
-    an[digit_sel] = 1'b0;  // active-low
-    seg_out       = seven_segment_encode(digit_vals[digit_sel]);
-    decimalPoint  = 1'b0;  // or control per digit_sel if you like
-  end
-
-  assign seg = seg_out;
-
-  function logic [6:0] seven_segment_encode(input logic [3:0] v);
-    case (v)
-      4'd0: seven_segment_encode = 7'b100_0000;
-      4'd1: seven_segment_encode = 7'b111_1001;
-      4'd2: seven_segment_encode = 7'b010_0100;
-      4'd3: seven_segment_encode = 7'b011_0000;
-      4'd4: seven_segment_encode = 7'b001_1001;
-      4'd5: seven_segment_encode = 7'b001_0010;
-      4'd6: seven_segment_encode = 7'b000_0010;
-      4'd7: seven_segment_encode = 7'b111_1000;
-      4'd8: seven_segment_encode = 7'b000_0000;
-      4'd9: seven_segment_encode = 7'b001_0000;
-      default: seven_segment_encode = 7'b111_1111;
-    endcase
-  endfunction
+  assign seg = seg_reg_stage2;
 
   //===================================================
   // FSM Controller
@@ -198,11 +295,6 @@ module system_controller (
   // SPI Peripheral
   //===================================================
   logic spi_rx_data_is_zero;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) digit_1 <= 4'd0;
-    else if (spi_rx_data_is_zero) digit_1 <= 4'd0;
-  end
 
   spi_peripheral spi_peripheral_inst (
       .rst_n(rst_n),
