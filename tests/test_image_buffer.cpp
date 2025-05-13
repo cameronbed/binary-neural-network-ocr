@@ -49,6 +49,37 @@ std::string decode_seg(uint8_t seg)
     }
 }
 
+std::string read_seg(Vsystem_controller *dut, int max_cycles = 500)
+{
+    std::string digits(4, ' '); // Pre-fill with blanks
+
+    // Track which digits we've already read
+    bool digit_seen[4] = {false, false, false, false};
+    int digits_read = 0;
+
+    for (int i = 0; i < max_cycles && digits_read < 4; ++i)
+    {
+        tick_main_clk(dut, 1);
+
+        for (int d = 0; d < 4; ++d)
+        {
+            // Check if this digit is currently selected (active-low)
+            if (!digit_seen[d] && ((dut->an >> d) & 1) == 0)
+            {
+                std::string decoded = decode_seg(dut->seg);
+                digits[d] = (decoded == "Blank/Unknown") ? '?' : decoded[0];
+                digit_seen[d] = true;
+                digits_read++;
+            }
+        }
+    }
+
+    return "[" + std::string(1, digits[0]) + "] " +
+           "[" + std::string(1, digits[1]) + "] " +
+           "[" + std::string(1, digits[2]) + "] " +
+           "[" + std::string(1, digits[3]) + "]";
+}
+
 // Extracted function to flatten a 30x30 pattern into a single string
 std::string flatten_pattern(const std::vector<std::string> &pattern)
 {
@@ -108,7 +139,7 @@ void send_digit(Vsystem_controller *dut, const std::vector<std::string> &digit, 
         tick_main_clk(dut, 3);
 
     tick_main_clk(dut, 5);
-    std::string decoded_seg = decode_seg(dut->seg);
+    std::string decoded_seg = read_seg(dut, 100);
     std::cout << "[SEG DISPLAY] 7-segment display for digit " << idx << ": " << decoded_seg << "\n";
 
     tick_main_clk(dut, 6);
@@ -181,16 +212,16 @@ void test_send_repeating_pattern(Vsystem_controller *dut)
         tick_main_clk(dut, 10);
 
     // Wait for DUT to enter BNN done state
-    std::string decoded_seg = decode_seg(dut->seg);
+    std::string decoded_seg = read_seg(dut, 100);
     std::cout << "[SEG DISPLAY] 7-segment display: " << decoded_seg << "\n";
 
     check_fsm_state(dut, STATUS_RESULT_RDY, "STATUS_RESULT_RDY");
-    decoded_seg = decode_seg(dut->seg);
+    decoded_seg = read_seg(dut, 100);
     std::cout << "[SEG DISPLAY] 7-segment display: " << decoded_seg << "\n";
 
     tick_main_clk(dut, 10);
 
-    decoded_seg = decode_seg(dut->seg);
+    decoded_seg = read_seg(dut, 100);
     std::cout << "[SEG DISPLAY] 7-segment display: " << decoded_seg << "\n";
 
     std::cout << "[TEST] Repeating pattern processed successfully\n";

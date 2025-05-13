@@ -6,7 +6,6 @@
 `include "FC.sv"
 `include "Comparator.sv"
 `endif
-
 `timescale 1ns / 1ps
 
 module bnn_top #(
@@ -22,7 +21,6 @@ module bnn_top #(
     parameter int FC_IC = POOL2_IMG_OUT_SIZE * POOL2_IMG_OUT_SIZE * CONV2_OC,
     parameter int OUTPUT_BIT = $clog2(FC_OC + 1)  // num of bits to enumerate each class
 ) (
-
     input logic [CONV1_IMG_IN_SIZE*CONV1_IMG_IN_SIZE-1:0] conv1_img_in[0:CONV1_IC-1],
     input logic clk,
     input logic data_in_ready,
@@ -5845,35 +5843,35 @@ module bnn_top #(
   logic fc_data_ready;
 
   logic conv1_img_in_nonzero;
-logic data_in_ready_prev;  // Flag to track the previous state of data_in_ready
-logic print_flag;          // Flag to ensure printing happens only once per high pulse
+  logic data_in_ready_prev;  // Flag to track the previous state of data_in_ready
+  logic print_flag;  // Flag to ensure printing happens only once per high pulse
 
-always_comb begin
+  always_comb begin
     conv1_img_in_nonzero = 0;
     for (int i = 0; i < CONV1_IC; i++) begin
-        conv1_img_in_nonzero |= |conv1_img_in[i];
+      conv1_img_in_nonzero |= |conv1_img_in[i];
     end
-end
+  end
 
-always_ff @(posedge clk) begin
+  always_ff @(posedge clk) begin
     if (data_in_ready && !data_in_ready_prev) begin  // Detect rising edge of data_in_ready
-        print_flag <= 1;  // Allow printing
+      print_flag <= 1;  // Allow printing
     end else if (!data_in_ready) begin
-        print_flag <= 0;  // Reset the flag when data_in_ready goes low
+      print_flag <= 0;  // Reset the flag when data_in_ready goes low
     end
 
     data_in_ready_prev <= data_in_ready;  // Update the previous state of data_in_ready
 
     if (data_in_ready && print_flag) begin
-        if (conv1_img_in_nonzero) begin
-            $display("[BNN_TOP] Full Binary Array:");
-        end else begin
-            $display("[BNN_TOP] Binary Array is empty.");
-        end
-        print_flag <= 0;  // Ensure the message is printed only once
+      if (conv1_img_in_nonzero) begin
+        $display("[BNN_TOP] Full Binary Array:");
+      end else begin
+        $display("[BNN_TOP] Binary Array is empty.");
+      end
+      print_flag <= 0;  // Ensure the message is printed only once
     end
-end
-  
+  end
+
 
 
   Conv2d_MaxPool2d #(
@@ -5882,7 +5880,7 @@ end
       .CONV_IMG_IN_SIZE(CONV1_IMG_IN_SIZE)
   ) conv_pool1 (
       .clk(clk),
-      .data_in_ready(data_in_ready), // from bnn_interface
+      .data_in_ready(data_in_ready),  // from bnn_interface
       .img_in(conv1_img_in),
       .weights(conv1_weights),
       .img_out(pool1_img_out),

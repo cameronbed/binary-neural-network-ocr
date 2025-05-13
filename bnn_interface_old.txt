@@ -1,0 +1,266 @@
+`timescale 1ns / 1ps
+
+`ifndef SYNTHESIS
+`include "bnn_module/bnn_top.sv"
+`endif
+
+module bnn_interface (
+    input logic clk,
+    input logic rst_n,
+
+    // Data
+    input  logic [899:0] img_in,
+    output logic [  3:0] result_out,
+
+    // Control
+    output logic result_ready,
+    input  logic bnn_enable,
+    input  logic bnn_clear
+);
+  //------------------------------------------------------------------
+  // Parameters / types
+  //------------------------------------------------------------------
+  parameter int CONV1_IMG_IN_SIZE = 30;
+  parameter int CONV1_IC = 1;
+
+  typedef enum logic [1:0] {
+    IDLE,
+    INFERENCE,
+    DONE
+  } bnn_state_t;
+
+  //------------------------------------------------------------------
+  // Slow-clock enable (divide-by-4 for example)
+  //------------------------------------------------------------------
+  (* USE_DSP = "no", SHREG_EXTRACT = "no" *)
+  logic [1:0] clk_div;
+  logic       bnn_clk_en;
+
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) clk_div <= 2'd0;
+    else clk_div <= clk_div + 2'd1;
+
+  assign bnn_clk_en = (clk_div == 2'b00);
+
+  //------------------------------------------------------------------
+  // Internal / intermediate signals
+  //------------------------------------------------------------------
+
+  // Top-level Module signals
+  logic [899:0] img_in_internal;
+  logic         result_ready_internal;
+  logic [  3:0] result_out_internal;
+
+  // BNN Module signals
+  logic [899:0] img_to_bnn_raw;
+  logic         data_in_ready_raw;
+  logic [  3:0] result_out_from_bnn_raw;
+  logic         data_out_ready_raw;
+
+  // Intermediate signals
+  logic         data_in_ready_stage;
+  logic         data_out_ready_stage;
+
+  //------------------------------------------------------------------
+  // Handshake: host → BNN  (request)  and  BNN → host  (done)
+  //------------------------------------------------------------------
+  //   Two independent toggle/acknowledge channels:
+  //   h2b_req_tog_*  : flips once when host wants a new inference
+  //   b2h_done_tog_* : flips once when BNN finishes that inference
+
+  // Toggles in the host clock domain
+  logic         h2b_req_tog_clk;  // host request
+  logic         b2h_done_tog_clk;  // BNN-done, synchronised
+  // Toggles in the BNN (slow) domain
+  logic         h2b_req_tog_bnn;
+  logic         b2h_ack_tog_bnn;
+  logic         b2h_done_tog_bnn;
+
+  logic [  1:0] h2b_sync;
+
+  wire          b2h_ack_tog_clk;  // stub (constant 0 for now)
+
+  assign b2h_ack_tog_clk = 1'b0;  // will be real in a later step
+
+  //------------------------------------------------------------------
+  // pulse-based handshakes
+  //------------------------------------------------------------------
+  //------------------------------------------------------------------
+  // 1.  Generate the request toggle — its own always_ff
+  //------------------------------------------------------------------
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) h2b_req_tog_clk <= 1'b0;
+    else if (state == IDLE && bnn_enable && !data_in_ready_stage)  // one flip per new request
+      h2b_req_tog_clk <= ~h2b_req_tog_clk;
+  end
+
+  //------------------------------------------------------------------
+  // 2.  data_in_ready signals (keep them **wires** only)
+  //------------------------------------------------------------------
+  //--------------------------------------------------------------
+  // Convert the request toggle into a 'busy' level for bnn_top
+  //--------------------------------------------------------------
+  logic data_in_level_bnn;  // holds HIGH while BNN is busy
+  logic h2b_req_tog_bnn_q;  // delayed toggle
+
+  // delay the toggle by one slow cycle
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) h2b_req_tog_bnn_q <= 1'b0;
+    else if (bnn_clk_en) h2b_req_tog_bnn_q <= h2b_req_tog_bnn;
+  end
+
+  // raise level when a new edge arrives, drop when core is done
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) data_in_level_bnn <= 1'b0;
+    else if (bnn_clk_en) begin
+      // set
+      if (h2b_req_tog_bnn & ~h2b_req_tog_bnn_q) data_in_level_bnn <= 1'b1;
+      // clear
+      else if (data_out_ready_raw) data_in_level_bnn <= 1'b0;
+    end
+  end
+
+  assign data_in_ready_raw   = data_in_level_bnn;  // <- bnn_top sees a LEVEL
+  assign data_in_ready_stage = (h2b_req_tog_clk != b2h_ack_tog_clk);  // to FSM
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) h2b_sync <= 2'b00;
+    else if (bnn_clk_en) h2b_sync <= {h2b_sync[0], h2b_req_tog_clk};
+  end
+  assign h2b_req_tog_bnn = h2b_sync[1];
+
+  // ---------------- Result sync back to host ----------------
+  logic data_out_ready_sync1, data_out_ready_sync2;
+  logic [3:0] result_out_sync;
+  logic [3:0] result_out_clk_sync1, result_out_clk_sync2;
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      data_out_ready_sync1 <= 1'b0;
+      data_out_ready_sync2 <= 1'b0;
+      result_out_clk_sync1 <= 4'd0;
+      result_out_clk_sync2 <= 4'd0;
+    end else begin
+      data_out_ready_sync1 <= data_out_ready_raw;
+      data_out_ready_sync2 <= data_out_ready_sync1;
+      result_out_clk_sync1 <= result_out_sync;
+      result_out_clk_sync2 <= result_out_clk_sync1;
+    end
+
+    $display(
+        "Time: %0t | data_out_ready_raw: %b | result_out_from_bnn_raw: %d | data_in_ready_raw %b",
+        $time, data_out_ready_raw, result_out_from_bnn_raw, data_in_ready_raw);
+
+  end
+
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      result_out_sync <= 4'd0;
+    end else if (bnn_clk_en && data_out_ready_raw) begin
+      result_out_sync <= result_out_from_bnn_raw;
+    end
+
+    $display("Time: %0t | result_out_sync updated: %d", $time, result_out_sync);
+
+  end
+
+  assign result_out           = (|img_in_stage) ? result_out_internal : 4'd10;
+  assign result_out_internal  = result_out_stage;
+  assign result_ready         = result_ready_internal;
+
+  assign data_out_ready_stage = data_out_ready_sync1 | data_out_ready_sync2;
+
+  //------------------------------------------------------------------
+  // BNN-core instantiation
+  //------------------------------------------------------------------
+  bnn_top u_bnn_top (
+      .clk(bnn_clk_en),
+      .conv1_img_in('{img_to_bnn_raw}),
+      .data_in_ready(data_in_ready_raw),
+      .result(result_out_from_bnn_raw),
+      .data_out_ready(data_out_ready_raw)
+  );
+
+  //------------------------------------------------------------------
+  // FSM
+  //------------------------------------------------------------------
+  bnn_state_t state, next_state;
+
+  logic [899:0] img_in_stage;
+  logic [  3:0] result_out_stage;
+
+  // Next-state logic
+  always_comb begin
+    next_state = state;
+    case (state)
+      IDLE: if (data_in_ready_stage) next_state = INFERENCE;
+      INFERENCE: if (data_out_ready_stage) next_state = DONE;
+      DONE: if (bnn_clear) next_state = IDLE;
+      default: next_state = IDLE;
+    endcase
+  end
+
+  // sequential logic
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      state <= IDLE;
+
+      result_ready_internal <= 1'b0;
+      // data_in_ready_stage <= 1'b0;
+      result_out_stage <= 4'd0;
+
+      img_in_stage <= 900'd0;
+      img_to_bnn_raw <= 900'd0;
+    end else if (bnn_clear) begin
+      state <= IDLE;
+
+      result_ready_internal <= 1'b0;
+      // data_in_ready_stage <= 1'b0;
+      result_out_stage <= 4'd0;
+
+      img_in_stage <= 900'd0;
+      img_to_bnn_raw <= 900'd0;
+    end else begin
+      state <= next_state;
+
+      case (state)
+        IDLE: begin
+          // data_in_ready_stage   <= 1'b0;
+          result_ready_internal <= 1'b0;
+          img_to_bnn_raw        <= 900'd0;
+
+          if (data_in_ready_stage) begin
+            img_in_stage   <= img_in;
+            img_to_bnn_raw <= img_in;
+          end
+        end
+
+        INFERENCE: begin
+          // data_in_ready_stage <= 1'b0;
+          if (data_out_ready_stage) begin
+            result_out_stage <= result_out_clk_sync2;
+            result_ready_internal <= 1'b1;
+
+            $display(
+                "Time: %0t | data_out_ready_stage: %b | result_ready_internal: %b | data_in_ready_raw %b",
+                $time, data_out_ready_stage, result_ready_internal, data_in_ready_raw);
+
+          end
+        end
+
+        DONE: begin
+          if (bnn_clear) begin
+            result_ready_internal <= 1'b0;  // clear result ready
+          end else begin
+            result_ready_internal <= 1'b1;  // hold ready until clear
+          end
+        end
+
+        default: begin
+          result_ready_internal <= 1'b0;
+        end
+      endcase
+    end
+  end
+
+endmodule

@@ -4,13 +4,14 @@ module spi_peripheral (
     input logic rst_n,
     input logic clk,
 
-    // SPI pins
+    // SPI pins (asynchronous domain)
     input logic SCLK,
     input logic COPI,
     input logic spi_cs_n,
 
     // Data interface
     output logic [7:0] spi_rx_data,
+    output logic rx_data_is_zero,
 
     // Control Signals
     input  logic rx_enable,
@@ -42,68 +43,44 @@ module spi_peripheral (
   //===================================================
   // Synchronizers
   //===================================================
-  logic sclk_sample;
-  //logic sclk_debounced;
-  logic [1:0] sclk_hist;
+  logic sclk_sync_1, sclk_sync_2, sclk_sync_3;
+  logic copi_sync_1, copi_sync_2, copi_sync_3;
+  logic cs_sync_1, cs_sync_2, cs_sync_3;
+
+  logic sclk_filt, sclk_filt_prev;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      sclk_hist   <= 2'b00;
-      sclk_sample <= 1'b0;
+      sclk_sync_1 <= 0;
+      sclk_sync_2 <= 0;
+      sclk_sync_3 <= 0;
+
+      copi_sync_1 <= 0;
+      copi_sync_2 <= 0;
+      copi_sync_3 <= 0;
+
+      cs_sync_1   <= 1;
+      cs_sync_2   <= 1;
+      cs_sync_3   <= 1;
     end else begin
-      sclk_hist   <= {sclk_hist[0], SCLK};
-      sclk_sample <= &sclk_hist;  // Only goes high if both bits are high
+      sclk_sync_1 <= SCLK;
+      sclk_sync_2 <= sclk_sync_1;
+      sclk_sync_3 <= sclk_sync_2;
+
+      copi_sync_1 <= COPI;
+      copi_sync_2 <= copi_sync_1;
+      copi_sync_3 <= copi_sync_2;
+
+      cs_sync_1   <= spi_cs_n;
+      cs_sync_2   <= cs_sync_1;
+      cs_sync_3   <= cs_sync_2;
     end
   end
 
-  logic copi_q1, copi_q2;
-  logic sclk_q1, sclk_q2;
-  logic sclk_q3;
-  logic cs_q1, cs_q2;
+  // ====== SCLK Rising Edge Detection ======
+  wire sclk_rising = sclk_sync_2 && !sclk_sync_3;
 
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      copi_q1 <= 1'b0;
-      copi_q2 <= 1'b0;
-
-      sclk_q1 <= sclk_sample;
-      sclk_q2 <= 1'b0;
-      // sclk_q3 <= 1'b0;
-
-      cs_q1   <= 1'b1;
-      cs_q2   <= 1'b1;
-    end else begin
-      copi_q1 <= COPI;
-      copi_q2 <= copi_q1;
-
-      sclk_q1 <= sclk_sample;
-      sclk_q2 <= sclk_q1;
-      // sclk_q3 <= sclk_q2;
-
-      cs_q1   <= spi_cs_n;
-      cs_q2   <= cs_q1;
-    end
-  end
-
-  logic sclk_sync1, sclk_sync2;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      sclk_sync1 <= 0;
-      sclk_sync2 <= 0;
-    end else begin
-      sclk_sync1 <= SCLK;
-      sclk_sync2 <= sclk_sync1;
-    end
-  end
-  //===================================================
-  // Edge Detection for SCLK
-  //===================================================
-  wire sclk_rising = sclk_sync1 && !sclk_sync2;
-
-
-  //=========================================
-  // State Transition
-  //=========================================
+  // ====== FSM State Update ======
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) spi_state <= SPI_IDLE;
     else spi_state <= spi_next_state;
@@ -116,11 +93,11 @@ module spi_peripheral (
 
     case (spi_state)
       SPI_IDLE: begin
-        if (!cs_q2 && rx_enable) spi_next_state = SPI_RX;
+        if (!cs_sync_3 && rx_enable) spi_next_state = SPI_RX;
       end
 
       SPI_RX: begin
-        if (cs_q2) begin
+        if (cs_sync_3) begin
           // Transition to SPI_IDLE if CS is de-asserted mid-frame
           spi_next_state = SPI_IDLE;
         end else if (bit_cnt == 4'd7 && sclk_rising) begin
@@ -129,7 +106,8 @@ module spi_peripheral (
       end
 
       SPI_BYTE_READY: begin
-        if (byte_taken) spi_next_state = SPI_IDLE;
+        if (cs_sync_2) spi_next_state = SPI_IDLE;
+        else if (byte_taken) spi_next_state = SPI_IDLE;
       end
 
       default: spi_next_state = SPI_IDLE;
@@ -137,63 +115,63 @@ module spi_peripheral (
   end
 
   //-----------------------------------------
-  // SPI Reception Logic
+  // Shift Register and Bit Counter
   //-----------------------------------------
   logic [7:0] shift_reg;
+  logic [7:0] shift_reg_stable;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      bit_cnt   <= 4'd0;
-      shift_reg <= 8'd0;
+      bit_cnt   <= 0;
+      shift_reg <= 0;
     end else begin
       case (spi_state)
         SPI_IDLE: begin
-          if (!cs_q2 && rx_enable) begin
-            bit_cnt   <= 4'd0;
-            shift_reg <= 8'd0;
+          if (!cs_sync_3 && rx_enable) begin
+            bit_cnt   <= 0;
+            shift_reg <= 0;
           end
         end
 
         SPI_RX: begin
-          if (cs_q2) begin
-            bit_cnt   <= 4'd0;
-            shift_reg <= 8'd0;
+          if (cs_sync_3) begin
+            bit_cnt   <= 0;
+            shift_reg <= 0;
           end else if (sclk_rising) begin
-            shift_reg <= {shift_reg[6:0], copi_q2};
+            shift_reg <= {shift_reg[6:0], copi_sync_2};
             bit_cnt   <= bit_cnt + 1;
           end
         end
 
         SPI_BYTE_READY: begin
           if (byte_taken) begin
-            bit_cnt   <= 4'd0;
-            shift_reg <= 8'd0;
+            bit_cnt   <= 0;
+            shift_reg <= 0;
           end
         end
 
-        default: ;  // hold in SPI_IDLE
+        default: ;
       endcase
     end
   end
 
-  logic [7:0] shift_reg_stable;
-
+  // ====== Output Latching ======
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      shift_reg_stable <= 8'd0;
-    end else if (spi_state == SPI_BYTE_READY) begin
-      shift_reg_stable <= shift_reg;  // Register shift_reg when transitioning to SPI_BYTE_READY
-    end
+    if (!rst_n) shift_reg_stable <= 0;
+    else if (spi_state == SPI_BYTE_READY) shift_reg_stable <= shift_reg;
   end
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) byte_valid <= 1'b0;
+    if (!rst_n) byte_valid <= 0;
     else byte_valid <= (spi_state == SPI_BYTE_READY);
   end
 
-  //=========================================
-  // Output Logic
-  //=========================================
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) rx_data_is_zero <= 0;
+    else if (spi_state == SPI_BYTE_READY) rx_data_is_zero <= (shift_reg_stable == 8'd0);
+  end
+
   assign spi_rx_data = shift_reg_stable;
 
 endmodule
+

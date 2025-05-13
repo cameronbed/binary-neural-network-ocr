@@ -17,6 +17,9 @@ module bnn_interface (
     input  logic bnn_enable,
     input  logic bnn_clear
 );
+  //------------------------------------------------------------------
+  // Parameters / types
+  //------------------------------------------------------------------
   parameter int CONV1_IMG_IN_SIZE = 30;
   parameter int CONV1_IC = 1;
 
@@ -26,22 +29,24 @@ module bnn_interface (
     DONE
   } bnn_state_t;
 
-  bnn_state_t state, next_state;
-
-  // =============== Clock Enable
-  (* USE_DSP = "no", SHREG_EXTRACT = "no" *)logic [1:0] clk_div;
+  //------------------------------------------------------------------
+  // Slow-clock enable (divide-by-4 for example)
+  //------------------------------------------------------------------
+  (* USE_DSP = "no", SHREG_EXTRACT = "no" *)
+  logic [1:0] clk_div;
   logic       bnn_clk_en;
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) clk_div <= 0;
-    else clk_div <= clk_div + 1;
-  end
+
+  always_ff @(posedge clk or negedge rst_n)
+    if (!rst_n) clk_div <= 2'd0;
+    else clk_div <= clk_div + 2'd1;
+
   assign bnn_clk_en = (clk_div == 2'b00);
 
-  // =================== Internal Signals ==========
+  //------------------------------------------------------------------
+  // Internal / intermediate signals
+  //------------------------------------------------------------------
   // Top-level Module signals
   logic [899:0] img_in_internal;
-  logic         bnn_enable_internal;
-  logic         bnn_clear_internal;
   logic         result_ready_internal;
   logic [  3:0] result_out_internal;
 
@@ -52,19 +57,8 @@ module bnn_interface (
   logic         data_out_ready_raw;
 
   // Intermediate signals
-  logic [  3:0] result_out_stage;
   logic         data_in_ready_stage;
   logic         data_out_ready_stage;
-  logic [899:0] img_in_stage;
-
-  // ----------------- BNN Module Instantiation -----------------
-  bnn_top u_bnn_top (
-      .clk(bnn_clk_en),
-      .conv1_img_in('{img_to_bnn_raw}),
-      .data_in_ready(data_in_ready_raw),
-      .result(result_out_from_bnn_raw),
-      .data_out_ready(data_out_ready_raw)
-  );
 
   logic start_sys, start_sync1, start_sync2;
   wire h2b_pulse;
@@ -95,6 +89,7 @@ module bnn_interface (
   assign data_in_ready_raw = start_sync2;
 
   logic data_out_ready_sync1, data_out_ready_sync2;
+
   logic [3:0] result_out_sync;
   logic [3:0] result_out_clk_sync1, result_out_clk_sync2;
 
@@ -121,25 +116,35 @@ module bnn_interface (
   end
 
   assign result_out           = (|img_in_stage) ? result_out_internal : 4'd10;
-
-  assign img_in_internal      = img_in;
-  assign bnn_enable_internal  = bnn_enable;
-  assign bnn_clear_internal   = bnn_clear;
-
   assign result_out_internal  = result_out_stage;
   assign result_ready         = result_ready_internal;
-
   assign data_out_ready_stage = data_out_ready_sync2;
 
+  //------------------------------------------------------------------
+  // BNN-core instantiation
+  //------------------------------------------------------------------
+  bnn_top u_bnn_top (
+      .clk(bnn_clk_en),
+      .conv1_img_in('{img_to_bnn_raw}),
+      .data_in_ready(data_in_ready_raw),
+      .result(result_out_from_bnn_raw),
+      .data_out_ready(data_out_ready_raw)
+  );
 
+  //------------------------------------------------------------------
+  // FSM
+  //------------------------------------------------------------------
+  bnn_state_t state, next_state;
 
-  // ----------------------- FSM Next-State Logic ----------------------
+  logic [899:0] img_in_stage;
+  logic [  3:0] result_out_stage;
+
   always_comb begin
     next_state = state;
     case (state)
       IDLE: if (data_in_ready_stage) next_state = INFERENCE;
       INFERENCE: if (data_out_ready_stage) next_state = DONE;
-      DONE: if (bnn_clear_internal) next_state = IDLE;
+      DONE: if (bnn_clear) next_state = IDLE;
       default: next_state = IDLE;
     endcase
   end
@@ -173,8 +178,8 @@ module bnn_interface (
           img_to_bnn_raw        <= 900'd0;
 
           if (h2b_pulse) begin
-            img_in_stage        <= img_in_internal;
-            img_to_bnn_raw      <= img_in_internal;
+            img_in_stage        <= img_in;
+            img_to_bnn_raw      <= img_in;
             data_in_ready_stage <= 1'b1;
           end
         end
@@ -188,7 +193,7 @@ module bnn_interface (
         end
 
         DONE: begin
-          if (bnn_clear_internal) begin
+          if (bnn_clear) begin
             result_ready_internal <= 1'b0;  // clear result ready
           end else begin
             result_ready_internal <= 1'b1;  // hold ready until clear
